@@ -2,11 +2,13 @@
 
 One run drives the proposer (ADR-0004) and the paired evaluator (ADR-0003) for up
 to ``rounds`` rounds against a fixed set of cases. Each round runs the current
-baseline once - both to hand the proposer its failure digests and to avoid running
-the baseline a second time inside the paired evaluation - asks for one edit, runs
-the candidate, and keeps the candidate as the new baseline only when the paired
-criterion accepts it. Every round's snapshots, edit, report and verdict, plus a
-run-level history, are written to a run directory so any round can be inspected.
+baseline once *per distinct baseline* - both to hand the proposer its failure
+digests and to avoid running the baseline a second time inside the paired
+evaluation - asks for one edit, runs the candidate, and keeps the candidate as the
+new baseline only when the paired criterion accepts it. A reused baseline arm is
+not run, and not counted against the budget (ADR-0010). Every round's snapshots,
+edit, report and verdict, plus a run-level history, are written to a run directory
+so any round can be inspected.
 """
 
 from __future__ import annotations
@@ -62,6 +64,7 @@ class RoundRecord:
     candidate: Snapshot
     proposal: Proposal
     report: PairedReport
+    baseline_reused: bool = False
 
     @property
     def accepted(self) -> bool:
@@ -69,8 +72,26 @@ class RoundRecord:
 
     @property
     def tokens(self) -> int:
-        """Every token this round spent: the baseline arm plus the candidate arm."""
+        """What this round's two arms cost to *measure*: baseline plus candidate.
+
+        The same baseline can be measured more than once (a rollback leaves it in
+        place), so this counts a reused baseline arm again. For the tokens actually
+        spent running episodes use :attr:`spent_tokens` (ADR-0010).
+        """
         return self.report.baseline_tokens + self.report.candidate_tokens
+
+    @property
+    def spent_tokens(self) -> int:
+        """Tokens this round actually spent running episodes (ADR-0010).
+
+        The candidate arm always runs. The baseline arm only runs when its
+        episodes were not reused - the loop keeps each distinct baseline's
+        episodes, including the accepted candidate that becomes the next
+        baseline, so a reused baseline costs nothing and is not counted again.
+        """
+        if self.baseline_reused:
+            return self.report.candidate_tokens
+        return self.tokens
 
 
 @dataclass(frozen=True)
@@ -135,9 +156,11 @@ def run_evolution(
 
     The baseline episodes are run once per distinct baseline and reused across
     rounds (a rollback leaves the baseline unchanged, so its episodes and the
-    proposer's failure digests stay valid). ``max_workers`` runs a round's
-    episodes concurrently (see :mod:`agent_evolution.parallel`); it defaults to
-    the ``AGENT_EVOLUTION_WORKERS`` environment variable, else one.
+    proposer's failure digests stay valid); an accepted candidate's episodes are
+    kept too, so they become the next round's baseline for free. ``tokens_used``
+    therefore counts only the episodes actually run (ADR-0010). ``max_workers``
+    runs a round's episodes concurrently (see :mod:`agent_evolution.parallel`); it
+    defaults to the ``AGENT_EVOLUTION_WORKERS`` environment variable, else one.
     """
     records: list[RoundRecord] = []
     tokens_used = 0
@@ -157,6 +180,7 @@ def run_evolution(
                 stop_reason = StopReason.BUDGET
                 break
             baseline_outcomes = baseline_cache.get(current.fingerprint())
+            baseline_reused = baseline_outcomes is not None
             if baseline_outcomes is None:
                 baseline_outcomes = _run_cases(adapter, current, cases, max_workers=max_workers)
                 baseline_cache[current.fingerprint()] = baseline_outcomes
@@ -180,14 +204,20 @@ def run_evolution(
                 seed=seed,
                 max_workers=max_workers,
             )
-            record = RoundRecord(index, current, candidate, proposal, report)
+            record = RoundRecord(
+                index, current, candidate, proposal, report, baseline_reused=baseline_reused
+            )
             records.append(record)
-            tokens_used += record.tokens
-            last_round_tokens = record.tokens
+            tokens_used += record.spent_tokens
+            last_round_tokens = record.spent_tokens
             if on_round is not None:
                 on_round(record)
             if record.accepted:
                 current, consecutive_rollbacks = candidate, 0
+                baseline_cache.setdefault(
+                    candidate.fingerprint(),
+                    [(outcome.case, outcome.candidate) for outcome in report.outcomes],
+                )
             else:
                 consecutive_rollbacks += 1
                 if max_rollbacks and consecutive_rollbacks >= max_rollbacks:
@@ -256,6 +286,8 @@ def round_payload(record: RoundRecord) -> dict:
         "baseline_passes": record.report.baseline_passes,
         "candidate_passes": record.report.candidate_passes,
         "tokens": record.tokens,
+        "spent_tokens": record.spent_tokens,
+        "baseline_reused": record.baseline_reused,
     }
 
 

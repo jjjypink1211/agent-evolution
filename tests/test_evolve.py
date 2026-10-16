@@ -79,7 +79,9 @@ def test_budget_stops_before_the_round_that_would_exceed() -> None:
     report = run(passing, "v1", "v2", "v3", rounds=10, budget_tokens=100)
 
     assert report.stop_reason is StopReason.BUDGET
-    assert report.rounds_run == 2
+    # Round 1 measures both arms (25 + 25); its rollback leaves v1 in place, so
+    # rounds 2 and 3 reuse that baseline and spend only the candidate arm (25).
+    assert report.rounds_run == 3
     assert report.tokens_used == 100
 
 
@@ -187,6 +189,28 @@ def test_baseline_is_run_once_and_reused_across_rollbacks() -> None:
     assert len(baseline_runs) == len(CASES)
 
 
+def test_accepted_candidate_episodes_become_the_next_baseline() -> None:
+    adapter = adapter_for({"v0": set(), "v1": set(ALL_IDS), "v2": set(ALL_IDS), "v3": set()})
+
+    report = run_evolution(
+        adapter,
+        Proposer(model=system_prompt_edits("v1", "v2", "v3")),
+        baseline=Snapshot(system_prompt="v0"),
+        cases=CASES,
+        suites=("combined",),
+        label="combined",
+        rounds=3,
+        max_rollbacks=0,
+    )
+
+    assert [record.baseline_reused for record in report.rounds] == [False, True, True]
+    v1_runs = [snapshot for snapshot, _ in adapter.calls if snapshot.system_prompt == "v1"]
+    assert len(v1_runs) == len(CASES)
+    assert [record.spent_tokens for record in report.rounds] == [50, 25, 25]
+    assert report.tokens_used == 100
+    assert sum(record.tokens for record in report.rounds) == 150
+
+
 def test_workers_do_not_change_the_decision() -> None:
     passing = {"v0": set(), "v1": set(ALL_IDS), "v2": set(ALL_IDS), "v3": set()}
 
@@ -221,6 +245,10 @@ def test_save_run_writes_round_artifacts_and_history(tmp_path: Path) -> None:
     assert payload["accepts"] == 1
     assert payload["stop_reason"] == "rounds_exhausted"
     assert payload["baseline_fingerprint"] == Snapshot(system_prompt="v1").fingerprint()
+
+    measured = payload["rounds"][0]
+    assert measured["tokens"] == measured["spent_tokens"]
+    assert measured["baseline_reused"] is False
 
 
 def test_render_history_summarises_the_run() -> None:

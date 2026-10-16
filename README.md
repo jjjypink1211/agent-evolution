@@ -53,7 +53,7 @@
 | `runs/eval-exactness-hint`(人工候选对照) | **accept** | 1/5 → 5/5 | +4 | +0.400 | 75,817 |
 
 - 循环找到的编辑是 **`write_artifact` 的工具描述**(「…pass only that exact, case-sensitive token…」);提案器自述理由正是这条诊断:「Every todo_list episode fails the gate even though the token appears once in each file … the agent currently wraps the token in prose」。它**胜过**人工手写的 system_prompt 版(+5 vs +4),因为更贴近失效点。
-- 总花费 **157,577 tokens ≈ ¥5.77**(按 kimi 计价)。`history.json` 的 `tokens_used` 会把回滚轮复用的基线 episode 重复计入,故偏高(上报 244,525)。
+- 总花费 **157,577 tokens ≈ ¥5.77**(按 kimi 计价)。这与 `runs/evolve-kimi-digest-fix/episodes/` 下 **20 个 episode**（4 个快照 × 5 例）一致；`history.json` 的 `tokens_used` 现在正是这个数（`docs/adr/0010`：复用基线不重记）。
 - 修复**失败摘要**(`docs/adr/0009`)之前,同样的三跑**全部回滚**、下界恒为 +0.000(`runs/evolve-kimi-todo3`,net +2/+1/+2)。
 - 换更便宜的被测**没有空间**:DeepSeek 在 6 个套件 **30/30**(`runs/baseline-probe`),在 10 例难用例上仍 **10/10**(`runs/baseline-hard`)。
 - 运行目录都在 `runs/`(已 `.gitignore`,不入库);命令与判据可复现。
@@ -178,7 +178,8 @@ agent-evolution evolve --baseline snapshots/system-hint --suite todo_list --work
 
 - **并发**：`--workers N`(或环境变量 `AGENT_EVOLUTION_WORKERS=N`)并行跑同一快照的一批 episode(保序,上限为用例数)。默认 1 = 旧的顺序行为。`.env` 无此变量时行为逐字节不变。
 - **基线复用**：回滚后基线快照不变,其 episode 与提案器失败摘要跨轮复用,不再每轮重跑。
-- 二者只改「谁在跑 / 跑几次」,**不改变**接受/回滚判据与随机种子。详见 `docs/adr/0007`。
+- **候选复用**：accept 后,该候选的 episode 直接成为下一轮的基线,不再重跑一整臂;`tokens_used` 只计真正跑过的 episode(见 `docs/adr/0010`)。
+- 三者只改「谁在跑 / 跑几次」,**不改变**接受/回滚判据与随机种子。详见 `docs/adr/0007`、`0010`。
 
 ### 产物
 
@@ -188,6 +189,6 @@ agent-evolution evolve --baseline snapshots/system-hint --suite todo_list --work
 ## 文档索引
 
 - `GLOSSARY.md` —— 领域术语(唯一权威措辞)。
-- `docs/adr/0001`–`0009` —— 关键设计决策与取舍。
+- `docs/adr/0001`–`0010` —— 关键设计决策与取舍。
 - `docs/agents/` —— issue tracker、triage 标签、领域文档布局等仓库约定。
 - `AGENTS.md` —— 给 agent 的入口。
