@@ -33,6 +33,9 @@ class FakeAdapter:
         self.calls.append((snapshot, case))
         return self.responder(snapshot, case)
 
+    def suites(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(case.suite for case in self.cases))
+
     def cases_for(self, suite: str) -> tuple[CaseRef, ...]:
         return tuple(case for case in self.cases if case.suite == suite)
 

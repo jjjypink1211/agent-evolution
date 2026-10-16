@@ -2,6 +2,7 @@
 
 from agent_evolution.adapter import Adapter, CaseRef, EpisodeResult
 from agent_evolution.edit import Edit, EditError, EditKind
+from agent_evolution.evolve import RoundRecord, RunReport, StopReason, run_evolution
 from agent_evolution.paired import Decision, PairedReport, evaluate
 from agent_evolution.proposer import (
     FailureReport,
@@ -29,7 +30,11 @@ __all__ = [
     "ProposalError",
     "Proposer",
     "ProposerModel",
+    "RoundRecord",
+    "RunReport",
     "Snapshot",
     "SnapshotError",
+    "StopReason",
     "evaluate",
+    "run_evolution",
 ]

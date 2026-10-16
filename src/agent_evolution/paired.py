@@ -96,6 +96,25 @@ def paired_outcomes(
     )
 
 
+def candidate_outcomes(
+    adapter: Adapter, candidate: Snapshot, cases: Sequence[CaseRef], baseline_results: Sequence[EpisodeResult]
+) -> tuple[CaseOutcome, ...]:
+    """Pair precomputed baseline episodes with freshly run candidate episodes.
+
+    The evolution loop has already run the baseline to gather the proposer's
+    failure digests, so it hands those episodes in rather than paying to run the
+    same baseline twice in one round.
+    """
+    if len(baseline_results) != len(cases):
+        raise ValueError(
+            f"baseline_results has {len(baseline_results)} episodes for {len(cases)} cases"
+        )
+    return tuple(
+        CaseOutcome(case, result, adapter.run(candidate, case))
+        for case, result in zip(cases, baseline_results)
+    )
+
+
 def bootstrap_interval(
     deltas: Sequence[int],
     *,
@@ -127,6 +146,7 @@ def evaluate(
     suite: str,
     baseline_label: str = "baseline",
     candidate_label: str = "candidate",
+    baseline_results: Sequence[EpisodeResult] | None = None,
     token_budget: int | None = None,
     resamples: int = DEFAULT_RESAMPLES,
     seed: int = DEFAULT_SEED,
@@ -138,8 +158,16 @@ def evaluate(
     lower bound of the paired delta exceeds zero **and** the token cost is within
     budget. On a degenerate interval (a single case) a strict improvement of at
     least one case is enough (ADR-0003).
+
+    ``baseline_results`` lets a caller that has already run the baseline episodes
+    (the evolution loop, to build the proposer's failure digests) reuse them
+    instead of running the baseline a second time; it must line up one-to-one with
+    ``cases``.
     """
-    outcomes = paired_outcomes(adapter, baseline, candidate, cases)
+    if baseline_results is None:
+        outcomes = paired_outcomes(adapter, baseline, candidate, cases)
+    else:
+        outcomes = candidate_outcomes(adapter, candidate, cases, baseline_results)
     baseline_passes = sum(int(outcome.baseline.objective_pass) for outcome in outcomes)
     candidate_passes = sum(int(outcome.candidate.objective_pass) for outcome in outcomes)
     baseline_tokens = sum(outcome.baseline.tokens for outcome in outcomes)
@@ -302,6 +330,7 @@ __all__ = [
     "Decision",
     "PairedReport",
     "bootstrap_interval",
+    "candidate_outcomes",
     "evaluate",
     "paired_outcomes",
     "render_report",

@@ -5,8 +5,9 @@ on this module: the :class:`Adapter` protocol, :class:`CaseRef` and
 :class:`EpisodeResult`. They never import a target loop's internals. Concrete
 adapters live beside this module and are wired in from the outside.
 
-The protocol has three parts: enumerate a suite's cases (:meth:`Adapter.cases_for`),
-run one episode (:meth:`Adapter.run`), and explain a failure in prose
+The protocol has four parts: list the target's suites (:meth:`Adapter.suites`),
+enumerate a suite's cases (:meth:`Adapter.cases_for`), run one episode
+(:meth:`Adapter.run`), and explain a failure in prose
 (:meth:`Adapter.failure_digest`) so the proposer can stay target-agnostic.
 """
 
@@ -53,6 +54,14 @@ class Adapter(Protocol):
 
     def run(self, snapshot: Snapshot, case: CaseRef) -> EpisodeResult:
         """Run ``case`` against ``snapshot`` and return its normalised result."""
+        ...
+
+    def suites(self) -> Sequence[str]:
+        """Return every suite the target defines, in a stable order.
+
+        The loop uses this to expand ``--suite all`` into a full run without
+        knowing a target's protocol itself.
+        """
         ...
 
     def cases_for(self, suite: str) -> Sequence[CaseRef]:

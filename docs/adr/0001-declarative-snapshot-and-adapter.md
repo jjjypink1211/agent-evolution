@@ -28,7 +28,8 @@
 
 ## Amendment（接缝后续扩展，Decision 原文未改）
 
-`run` 之后的接缝又长出两件事，均为上层所需、且都必须由目标自己实现：
+`run` 之后的接缝又长出三件事，均为上层所需、且都必须由目标自己实现：
 
 - **枚举套件用例**（ticket #5）：`cases_for(suite) -> CaseRef`，让评测器吃显式用例列表而保持 target-agnostic。
 - **把一次失败渲染成人读摘要**（ticket #6，见 ADR-0004）：`failure_digest(snapshot, case, result) -> str`。相应地把「trajectory 穿过接缝」收敛为「门禁结果穿过接缝、轨迹只在摘要里被渲染」，上层因此不依赖任何目标的证据格式。
+- **列出目标定义的套件**（ticket #7，见 ADR-0005）：`suites() -> Sequence[str]`，让进化循环把 `--suite all` 展开成全量运行，而不必自己知道某个目标的 protocol。

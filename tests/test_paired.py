@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from agent_evolution.adapter import CaseRef, EpisodeResult
 from agent_evolution.paired import (
     Decision,
@@ -158,3 +160,42 @@ def test_render_report_lists_every_case() -> None:
 
     assert "decision: accept" in text
     assert all(case_id in text for case_id in case_ids)
+
+
+def test_baseline_results_are_reused_instead_of_rerun() -> None:
+    cases = tuple(CaseRef("combined", case_id) for case_id in ids(3))
+    baseline_results = [
+        episode(False, tokens=7, evidence=f"pre__{case.case_id}.json") for case in cases
+    ]
+
+    def responder(snapshot: Snapshot, case: CaseRef) -> EpisodeResult:
+        return episode(True, tokens=5, evidence=f"cand__{case.case_id}.json")
+
+    adapter = FakeAdapter(responder=responder)
+    report = evaluate(
+        adapter,
+        baseline=BASELINE,
+        candidate=CANDIDATE,
+        cases=cases,
+        suite="combined",
+        baseline_results=baseline_results,
+    )
+
+    assert report.decision is Decision.ACCEPT
+    assert (report.baseline_passes, report.candidate_passes) == (0, 3)
+    assert report.baseline_tokens == 21
+    assert [case for _, case in adapter.calls] == list(cases)
+    assert all(snapshot is CANDIDATE for snapshot, _ in adapter.calls)
+
+
+def test_baseline_results_must_line_up_with_cases() -> None:
+    cases = tuple(CaseRef("combined", case_id) for case_id in ids(3))
+    with pytest.raises(ValueError, match="baseline_results"):
+        evaluate(
+            FakeAdapter(),
+            baseline=BASELINE,
+            candidate=CANDIDATE,
+            cases=cases,
+            suite="combined",
+            baseline_results=[episode(False)],
+        )

@@ -25,6 +25,22 @@ def test_system_hint_adapter_satisfies_the_adapter_protocol(tmp_path: Path) -> N
     assert isinstance(SystemHintAdapter(client=object(), run_root=tmp_path), Adapter)
 
 
+def test_fake_adapter_lists_distinct_suites() -> None:
+    adapter = FakeAdapter(
+        cases=(CaseRef("combined", "all-01"), CaseRef("todo_list", "todo-01"), CaseRef("combined", "all-02"))
+    )
+    assert adapter.suites() == ("combined", "todo_list")
+
+
+def test_system_hint_adapter_lists_every_protocol_suite(tmp_path: Path) -> None:
+    module_path = resolve_target_dir() / TARGET_MODULE_NAME
+    if not module_path.is_file():
+        pytest.skip(f"system-hint target not found at {module_path}")
+    adapter = SystemHintAdapter(client=object(), run_root=tmp_path)
+    assert "combined" in adapter.suites()
+    assert len(adapter.suites()) == len(set(adapter.suites()))
+
+
 def test_upper_layer_uses_only_episode_result() -> None:
     """A consumer written against the seam alone works with either adapter."""
 

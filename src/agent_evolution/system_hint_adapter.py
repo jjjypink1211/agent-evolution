@@ -124,6 +124,10 @@ class SystemHintAdapter:
                 )
         return "\n".join(lines)
 
+    def suites(self) -> tuple[str, ...]:
+        """Return every suite the protocol defines, in declaration order."""
+        return tuple(self._protocol["cases"].keys())
+
     def cases_for(self, suite: str) -> tuple[CaseRef, ...]:
         """Return the protocol's cases for ``suite``, each with its default condition."""
         return tuple(CaseRef(suite, protocol_case["id"]) for protocol_case in self._suite_cases(suite))
