@@ -1,0 +1,51 @@
+{
+  "source": "runs/evolve-kimi-digest-fix",
+  "note": "runs/ is gitignored, so the real run cannot ship with the repo. Its per-round numbers (from rounds/NN/summary.json) are copied here so the README's claim is checkable from a clean clone.",
+  "suite": "todo_list",
+  "count": 5,
+  "rounds_requested": 3,
+  "stop_reason": "rounds_exhausted",
+  "rounds": [
+    {
+      "index": 1,
+      "baseline_fingerprint": "d3ab4203878342ac",
+      "candidate_fingerprint": "7af2dbe60e9af774",
+      "decision": "accept",
+      "baseline_passes": 0,
+      "candidate_passes": 5,
+      "net_passes": 5,
+      "confidence_interval": [1.0, 1.0],
+      "baseline_tokens": 42848,
+      "candidate_tokens": 43474,
+      "baseline_reused": false
+    },
+    {
+      "index": 2,
+      "baseline_fingerprint": "7af2dbe60e9af774",
+      "candidate_fingerprint": "c145d3f7312ee5ad",
+      "decision": "rollback",
+      "baseline_passes": 5,
+      "candidate_passes": 5,
+      "net_passes": 0,
+      "confidence_interval": [0.0, 0.0],
+      "baseline_tokens": 43474,
+      "candidate_tokens": 37281,
+      "baseline_reused": true
+    },
+    {
+      "index": 3,
+      "baseline_fingerprint": "7af2dbe60e9af774",
+      "candidate_fingerprint": "038a34c1bfc55017",
+      "decision": "rollback",
+      "baseline_passes": 5,
+      "candidate_passes": 5,
+      "net_passes": 0,
+      "confidence_interval": [0.0, 0.0],
+      "baseline_tokens": 43474,
+      "candidate_tokens": 33974,
+      "baseline_reused": true
+    }
+  ],
+  "tokens_used_reported_before_fix": 244525,
+  "tokens_used_corrected": 157577
+}

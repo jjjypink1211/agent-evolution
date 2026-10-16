@@ -54,6 +54,7 @@
 
 - 循环找到的编辑是 **`write_artifact` 的工具描述**(「…pass only that exact, case-sensitive token…」);提案器自述理由正是这条诊断:「Every todo_list episode fails the gate even though the token appears once in each file … the agent currently wraps the token in prose」。它**胜过**人工手写的 system_prompt 版(+5 vs +4),因为更贴近失效点。
 - 总花费 **157,577 tokens ≈ ¥5.77**(按 kimi 计价)。这与 `runs/evolve-kimi-digest-fix/episodes/` 下 **20 个 episode**（4 个快照 × 5 例）一致；`history.json` 的 `tokens_used` 现在正是这个数（`docs/adr/0010`：复用基线不重记）。
+- 该 run 的逐轮数字已钉进 `tests/fixtures/evolve-kimi-digest-fix.json`，由 `tests/test_measured_run.py` 断言——`runs/` 不入库，但这些声明**从干净 clone 即可复核**。
 - 修复**失败摘要**(`docs/adr/0009`)之前,同样的三跑**全部回滚**、下界恒为 +0.000(`runs/evolve-kimi-todo3`,net +2/+1/+2)。
 - 换更便宜的被测**没有空间**:DeepSeek 在 6 个套件 **30/30**(`runs/baseline-probe`),在 10 例难用例上仍 **10/10**(`runs/baseline-hard`)。
 - 运行目录都在 `runs/`(已 `.gitignore`,不入库);命令与判据可复现。
@@ -76,6 +77,8 @@ src/agent_evolution/
 snapshots/system-hint/  # 规范的 golden 快照(canonical)
 protocols/              # 进化专用 protocol(从目标冻结件派生,不改冻结件)
 tests/                  # pytest;目标或录制缺失时自动 skip
+tests/fixtures/         # 实测 run 的数字(供干净 clone 复核)
+.github/workflows/      # CI:python -m pytest
 tools/sync_harness.py   # 把 canonical 快照同步/校验进目标仓
 tools/build_evolution_protocol.py  # 派生 protocols/system-hint-evolution.json
 docs/adr/               # 架构决策记录
@@ -132,6 +135,7 @@ python -m pytest
 
 - 纯离线:用回放/fake client,不访问网络。
 - 涉及目标的测试在目标缺失时 `skip`;回放测试依赖录制轨迹 `runs/exp2-8-kimi-k3-20260730-v1/cases/*.json`。
+- CI(`.github/workflows/ci.yml`)在 push 到 `main` 与每个 PR 上跑同一套测试(Python 3.11)。
 
 ### 用法
 
