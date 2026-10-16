@@ -1,0 +1,89 @@
+"""SystemHintAdapter reproduces the target's own gates, offline, from recordings."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from agent_evolution.adapter import CaseRef
+from agent_evolution.snapshot import Snapshot
+from agent_evolution.system_hint_adapter import SystemHintAdapter
+from agent_evolution.target_harness import resolve_target_dir
+
+from replay_client import ReplayClient, recorded_responses
+
+CAMPAIGN = "exp2-8-kimi-k3-20260730-v1"
+COMBINED_IDS = ("all-01", "all-02", "all-03", "all-04", "all-05")
+
+
+def recorded_case_path(case_id: str, condition: str = "combined") -> Path:
+    return (
+        resolve_target_dir() / "runs" / CAMPAIGN / "cases" / f"combined__{case_id}__{condition}.json"
+    )
+
+
+def run_recorded(
+    case_id: str, snapshot: Snapshot, run_root: Path, condition: str | None = None
+) -> tuple[dict, ReplayClient, object]:
+    arm = condition or "combined"
+    case_path = recorded_case_path(case_id, arm)
+    if not case_path.is_file():
+        pytest.skip(f"recorded case not found at {case_path}")
+    recorded = json.loads(case_path.read_text(encoding="utf-8"))
+    client = ReplayClient(recorded_responses(case_path))
+    adapter = SystemHintAdapter(client=client, run_root=run_root)
+    return recorded, client, adapter.run(snapshot, CaseRef("combined", case_id, condition))
+
+
+@pytest.mark.parametrize("case_id", COMBINED_IDS)
+def test_replayed_episode_matches_the_recorded_gates(
+    case_id: str, tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    recorded, _, result = run_recorded(case_id, Snapshot.load(default_snapshot_path), tmp_path)
+
+    assert result.objective_pass == recorded["objective_pass"]
+    assert dict(result.component_scores) == recorded["component_scores"]
+    assert result.llm_turns == recorded["llm_turns"]
+    assert result.tokens == recorded["usage"]["total_tokens"]
+    assert result.evidence_path.is_file()
+
+
+def test_control_arm_reproduces_an_objective_failure(
+    tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    recorded, _, result = run_recorded(
+        "all-04", Snapshot.load(default_snapshot_path), tmp_path, condition="disabled"
+    )
+
+    assert recorded["objective_pass"] is False
+    assert result.objective_pass is False
+    assert dict(result.component_scores) == recorded["component_scores"]
+
+
+def test_unknown_case_is_rejected(tmp_path: Path, default_snapshot_path: Path) -> None:
+    adapter = SystemHintAdapter(client=object(), run_root=tmp_path)
+    with pytest.raises(KeyError):
+        adapter.run(Snapshot.load(default_snapshot_path), CaseRef("combined", "nope-99"))
+
+
+def test_episode_request_uses_the_supplied_snapshot(
+    tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    base = Snapshot.load(default_snapshot_path)
+    edited = Snapshot(
+        features=base.features,
+        system_prompt="SNAPSHOT-MARKER-SYSTEM-PROMPT",
+        status_sections=base.status_sections,
+        tool_descriptions=base.tool_descriptions,
+    )
+
+    _, client, _ = run_recorded("all-01", edited, tmp_path)
+
+    assert client.requests
+    system_messages = [
+        message for message in client.requests[0]["messages"] if message["role"] == "system"
+    ]
+    assert system_messages
+    assert system_messages[0]["content"] == "SNAPSHOT-MARKER-SYSTEM-PROMPT"

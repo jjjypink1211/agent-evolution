@@ -1,9 +1,10 @@
 """Declarative harness snapshots: load, save, and diff.
 
 A snapshot is a directory holding a declarative, diffable representation of an
-agent loop's harness: the enabled ``features``, the system-prompt text, the
-``<agent_status>`` section templates, and the tool description texts. Loop
-control flow is deliberately out of scope.
+agent loop's harness: the system-prompt text, the ``<agent_status>`` section
+templates, the tool description texts, and the catalogue of known ``features``.
+Loop control flow is deliberately out of scope, and which features a run enables
+remains the target protocol's decision, not the snapshot's.
 """
 
 from __future__ import annotations

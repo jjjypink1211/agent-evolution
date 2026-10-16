@@ -1,13 +1,14 @@
 """Extract harness texts from the system-hint target loop, for golden checks.
 
-The target loop keeps its harness hardcoded until the prefactor lands. This
-module reads those texts back out of the live target so the default snapshot
-can be proven byte-identical to them.
+The target loop now loads its harness (system prompt, ``<agent_status>``
+section templates and tool descriptions) from a declarative snapshot
+directory. This module drives the live target to read those texts back out, so
+the default snapshot and the frozen golden fixture can be proven equal to the
+behaviour the refactored loop actually produces.
 """
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 import os
 import sys
@@ -28,8 +29,6 @@ FEATURES = (
     "todo_list",
     "tool_counter",
 )
-
-SYSTEM_PROMPT_PREFIX = "You are an audited local-sandbox agent"
 
 ENVELOPE_PREFIX = "<agent_status>\n"
 ENVELOPE_SUFFIX = "\n</agent_status>"
@@ -108,22 +107,14 @@ def load_module(path: Path) -> types.ModuleType:
     if spec is None or spec.loader is None:
         raise ValueError(f"cannot load target module from {path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
 
-def system_prompt(module_path: Path) -> str:
-    tree = ast.parse(module_path.read_text(encoding="utf-8"))
-    candidates = [
-        node.value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and node.value.startswith(SYSTEM_PROMPT_PREFIX)
-    ]
-    if len(candidates) != 1:
-        raise ValueError(f"expected exactly one system prompt literal, found {len(candidates)}")
-    return candidates[0]
+def system_prompt(module: types.ModuleType) -> str:
+    """Return the target loop's effective (snapshot-loaded) system prompt."""
+    return module.harness().system_prompt
 
 
 def tool_descriptions(module: types.ModuleType) -> dict[str, str]:
@@ -160,7 +151,7 @@ def extract(module_path: Path) -> dict[str, Any]:
         for case in STATUS_CASES
     }
     return {
-        "system_prompt": system_prompt(module_path),
+        "system_prompt": system_prompt(module),
         "tool_descriptions": tool_descriptions(module),
         "status_sections": dict(sorted(status_sections.items())),
     }
