@@ -73,6 +73,24 @@ def resolve_api_key(provider: str, env: Mapping[str, str] | None = None) -> str 
     return None
 
 
+def _render_message(message: Mapping[str, Any]) -> list[str]:
+    """One transcript message as digest lines, tool arguments included.
+
+    A model's tool *arguments* are where its own output lives - for a gate that
+    judges what was written, the arguments are the only evidence of *why* it
+    failed. Rendering only the message text shows "wrote artifacts/x.txt" with no
+    way to tell a correct write from a wrong one, so the proposer is left
+    guessing. Both the text and every call's name/arguments are rendered.
+    """
+    lines = [f"{message.get('role')}: {clip(message.get('content'), DIGEST_CHARS)}"]
+    for call in message.get("tool_calls") or []:
+        function = call.get("function") or {}
+        lines.append(
+            f"  call {function.get('name')}({clip(function.get('arguments'), DIGEST_CHARS)})"
+        )
+    return lines
+
+
 def resolve_protocol_path(target_dir: Path, protocol_path: Path | str | None = None) -> Path:
     """The protocol file to read: an explicit path, the env override, else the target's own.
 
@@ -177,10 +195,13 @@ class SystemHintAdapter:
             f"objective_pass={result.objective_pass} failed_gates={failed or 'none'}",
             f"complete={evidence.get('complete')} termination={evidence.get('termination')} "
             f"llm_turns={result.llm_turns} tokens={result.tokens}",
-            "-- transcript --",
         ]
+        gate = (self._protocol.get("objective_gates") or {}).get(case.suite)
+        if gate:
+            lines.append(f"gate {case.suite}: {gate}")
+        lines.append("-- transcript --")
         for message in evidence.get("messages", [])[-DIGEST_TURN_LIMIT:]:
-            lines.append(f"{message.get('role')}: {clip(message.get('content'), DIGEST_CHARS)}")
+            lines.extend(_render_message(message))
         failed_tools = [event for event in evidence.get("tool_events", []) if not event.get("ok")]
         if failed_tools:
             lines.append("-- failed tools --")

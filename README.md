@@ -154,6 +154,10 @@ agent-evolution evolve --baseline snapshots/system-hint --suite todo_list --work
 - 选择顺序:`--protocol` > `AGENT_EVOLUTION_PROTOCOL` > 目标自带的 `experiment_protocol.json`。
 - 冻结件一字不改;持久化证据带派生件自己的 `protocol_sha256`,不会与已发布战役混淆。详见 `docs/adr/0008`。
 
+### 失败摘要
+
+提案器每轮读到的**失败摘要**会渲染:门禁正文(`gate {suite}: ...`,即这条门禁到底要求什么)、以及每条消息里工具调用的**名称与 arguments**(产物内容就在 arguments 里)。丢掉 arguments 会让提案器看到「文件都写了、提交也齐」而无从判断失败原因——这是 0 accept 的真正根因。详见 `docs/adr/0009`。
+
 ### 提速
 
 - **并发**：`--workers N`(或环境变量 `AGENT_EVOLUTION_WORKERS=N`)并行跑同一快照的一批 episode(保序,上限为用例数)。默认 1 = 旧的顺序行为。`.env` 无此变量时行为逐字节不变。
@@ -168,6 +172,6 @@ agent-evolution evolve --baseline snapshots/system-hint --suite todo_list --work
 ## 文档索引
 
 - `GLOSSARY.md` —— 领域术语(唯一权威措辞)。
-- `docs/adr/0001`–`0008` —— 关键设计决策与取舍。
+- `docs/adr/0001`–`0009` —— 关键设计决策与取舍。
 - `docs/agents/` —— issue tracker、triage 标签、领域文档布局等仓库约定。
 - `AGENTS.md` —— 给 agent 的入口。

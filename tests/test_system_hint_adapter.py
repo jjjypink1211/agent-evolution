@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_evolution.adapter import CaseRef
+from agent_evolution.adapter import CaseRef, EpisodeResult
 from agent_evolution.edit import ON, Edit, EditKind
 from agent_evolution.snapshot import Snapshot
 from agent_evolution.system_hint_adapter import SystemHintAdapter, provider_key_vars, resolve_api_key
@@ -129,8 +129,59 @@ def test_failure_digest_reports_gates_and_transcript(
     assert "objective_pass=False" in digest
     assert "failed_gates=['timestamps']" in digest
     assert "termination=submit_result" in digest
+    assert "gate combined: " in digest
     assert "-- transcript --" in digest
     assert "assistant: " in digest
+
+
+def test_failure_digest_includes_tool_call_arguments(
+    tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    """A gate that judges what was written fails for reasons only the arguments show."""
+    evidence = {
+        "condition": "todo_list",
+        "complete": True,
+        "termination": "submit_result",
+        "messages": [
+            {"role": "system", "content": "SYSTEM"},
+            {"role": "user", "content": "write exactly the token"},
+            {
+                "role": "assistant",
+                "content": "Writing the artifact.",
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "write_artifact",
+                            "arguments": json.dumps(
+                                {"file": "a.txt", "content": "PROSE-INSTEAD-OF-TOKEN"}
+                            ),
+                        },
+                    }
+                ],
+            },
+            {"role": "tool", "content": "Wrote artifacts/a.txt"},
+        ],
+    }
+    evidence_path = tmp_path / "evidence.json"
+    evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+    adapter = SystemHintAdapter(client=object(), run_root=tmp_path)
+    result = EpisodeResult(
+        objective_pass=False,
+        component_scores={"todo_list": False},
+        llm_turns=1,
+        tokens=1,
+        evidence_path=evidence_path,
+    )
+
+    digest = adapter.failure_digest(
+        Snapshot.load(default_snapshot_path), CaseRef("todo_list", "todo-01"), result
+    )
+
+    assert "call write_artifact(" in digest
+    assert "PROSE-INSTEAD-OF-TOKEN" in digest
+    assert "gate todo_list: " in digest
 
 
 def test_distinct_snapshots_use_distinct_evidence_dirs(
