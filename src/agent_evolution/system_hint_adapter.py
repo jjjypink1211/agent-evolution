@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 from pathlib import Path
 from typing import Any, Mapping
@@ -22,6 +23,53 @@ PROTOCOL_NAME = "experiment_protocol.json"
 
 DIGEST_TURN_LIMIT = 24
 DIGEST_CHARS = 400
+
+# Which env vars may hold the key for which provider, mirroring the target's own
+# ``agentbook.providers.registry``. The run's credential must come from the
+# provider the protocol names, never from whichever key happens to be set first.
+PROVIDER_KEY_VARS: dict[str, tuple[str, ...]] = {
+    "dashscope": ("DASHSCOPE_API_KEY",),
+    "siliconflow": ("SILICONFLOW_API_KEY",),
+    "doubao": ("ARK_API_KEY",),
+    "kimi": ("MOONSHOT_API_KEY", "KIMI_API_KEY"),
+    "deepseek": ("DEEPSEEK_API_KEY",),
+    "zhipu": ("ZHIPU_API_KEY",),
+    "krill": ("KRILL_API_KEY",),
+    "atlascloud": ("ATLASCLOUD_API_KEY",),
+    "openrouter": ("OPENROUTER_API_KEY",),
+    "openai": ("OPENAI_API_KEY",),
+    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "ollama": ("OLLAMA_API_KEY",),
+}
+
+# Names the chapters use interchangeably, mapped to the canonical ones above.
+PROVIDER_ALIASES: dict[str, str] = {
+    "moonshot": "kimi",
+    "ark": "doubao",
+    "google": "gemini",
+    "qwen": "dashscope",
+    "bailian": "dashscope",
+}
+
+
+def provider_key_vars(provider: str) -> tuple[str, ...]:
+    """Return the env vars that may hold ``provider``'s key, most specific first.
+
+    An alias resolves to its canonical provider; an unknown provider yields an
+    empty tuple so callers fail loudly rather than reaching for an unrelated key.
+    """
+    name = provider.strip().lower()
+    return PROVIDER_KEY_VARS.get(PROVIDER_ALIASES.get(name, name), ())
+
+
+def resolve_api_key(provider: str, env: Mapping[str, str] | None = None) -> str | None:
+    """Return the first non-blank key configured for ``provider``, or ``None``."""
+    source = os.environ if env is None else env
+    for name in provider_key_vars(provider):
+        value = source.get(name, "").strip()
+        if value:
+            return value
+    return None
 
 
 def enabled_condition(protocol: Mapping[str, Any], suite: str) -> str:
@@ -146,6 +194,10 @@ class SystemHintAdapter:
 
 
 __all__ = [
+    "PROVIDER_ALIASES",
+    "PROVIDER_KEY_VARS",
     "SystemHintAdapter",
     "enabled_condition",
+    "provider_key_vars",
+    "resolve_api_key",
 ]

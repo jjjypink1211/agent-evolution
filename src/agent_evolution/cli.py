@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -93,9 +92,6 @@ def _show(path: Path) -> int:
     return 0
 
 
-API_KEY_ENV_VARS = ("MOONSHOT_API_KEY", "KIMI_API_KEY")
-
-
 def _default_out_dir(args: argparse.Namespace) -> Path:
     return Path("runs") / "paired" / f"{args.suite}__{args.baseline.name}__vs__{args.candidate.name}"
 
@@ -103,14 +99,23 @@ def _default_out_dir(args: argparse.Namespace) -> Path:
 def _build_adapter(args: argparse.Namespace, out_dir: Path) -> Adapter:
     from openai import OpenAI
 
-    from agent_evolution.system_hint_adapter import PROTOCOL_NAME, SystemHintAdapter
+    from agent_evolution.system_hint_adapter import (
+        PROTOCOL_NAME,
+        SystemHintAdapter,
+        provider_key_vars,
+        resolve_api_key,
+    )
     from agent_evolution.target_harness import resolve_target_dir
 
-    key = next((os.getenv(name) for name in API_KEY_ENV_VARS if os.getenv(name)), None)
-    if not key:
-        raise SystemExit(f"one of {', '.join(API_KEY_ENV_VARS)} is required to run evaluate")
     target_dir = Path(args.target_dir) if args.target_dir else resolve_target_dir()
     protocol = json.loads((target_dir / PROTOCOL_NAME).read_text(encoding="utf-8-sig"))
+    provider = protocol["provider"]["name"]
+    key = resolve_api_key(provider)
+    if not key:
+        expected = provider_key_vars(provider)
+        if not expected:
+            raise SystemExit(f"no API key variable is known for provider {provider!r}")
+        raise SystemExit(f"one of {', '.join(expected)} is required to run the {provider} target")
     client = OpenAI(api_key=key, base_url=protocol["provider"]["base_url"])
     return SystemHintAdapter(client=client, run_root=out_dir, target_dir=target_dir)
 

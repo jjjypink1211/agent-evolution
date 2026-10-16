@@ -9,7 +9,7 @@ import pytest
 
 from agent_evolution.adapter import CaseRef
 from agent_evolution.snapshot import Snapshot
-from agent_evolution.system_hint_adapter import SystemHintAdapter
+from agent_evolution.system_hint_adapter import SystemHintAdapter, provider_key_vars, resolve_api_key
 from agent_evolution.target_harness import TARGET_MODULE_NAME, resolve_target_dir
 
 from replay_client import ReplayClient, recorded_responses
@@ -148,3 +148,25 @@ def test_paired_arms_keep_separate_evidence_on_disk(
     assert baseline.evidence_path.is_file()
     assert candidate.evidence_path.is_file()
     assert baseline.objective_pass == candidate.objective_pass == recorded["objective_pass"]
+
+
+def test_provider_key_vars_follow_the_named_provider() -> None:
+    assert provider_key_vars("deepseek") == ("DEEPSEEK_API_KEY",)
+    assert provider_key_vars("kimi") == ("MOONSHOT_API_KEY", "KIMI_API_KEY")
+    assert provider_key_vars("moonshot") == provider_key_vars("kimi")
+
+
+def test_provider_key_vars_are_empty_for_an_unknown_provider() -> None:
+    assert provider_key_vars("mystery-provider") == ()
+
+
+def test_resolve_api_key_keys_off_the_provider_not_the_environment_order() -> None:
+    env = {"MOONSHOT_API_KEY": "kimi-key", "DEEPSEEK_API_KEY": "deepseek-key"}
+
+    assert resolve_api_key("deepseek", env) == "deepseek-key"
+    assert resolve_api_key("moonshot", env) == "kimi-key"
+    assert resolve_api_key("openai", env) is None
+
+
+def test_resolve_api_key_ignores_blank_values() -> None:
+    assert resolve_api_key("deepseek", {"DEEPSEEK_API_KEY": "   "}) is None

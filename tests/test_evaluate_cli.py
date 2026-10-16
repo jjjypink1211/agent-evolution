@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from pathlib import Path
+from types import ModuleType
 
-from agent_evolution import cli
+import pytest
+
+from agent_evolution import cli, system_hint_adapter
 from agent_evolution.adapter import CaseRef, EpisodeResult
 from agent_evolution.snapshot import Snapshot
 
@@ -86,3 +91,63 @@ def test_evaluate_only_runs_the_requested_suite(tmp_path: Path, monkeypatch) -> 
     assert payload["suite"] == "combined"
     assert all(case["suite"] == "combined" for case in payload["cases"])
     assert len(payload["cases"]) == 3
+
+
+def write_protocol(target: Path, provider: str, base_url: str = "https://example.invalid/v1") -> Path:
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / "experiment_protocol.json"
+    path.write_text(
+        json.dumps({"provider": {"name": provider, "base_url": base_url}}), encoding="utf-8"
+    )
+    return path
+
+
+def install_fake_openai(monkeypatch) -> dict:
+    seen: dict = {}
+    fake_openai = ModuleType("openai")
+
+    def fake_client(**kwargs):
+        seen["client"] = kwargs
+        return object()
+
+    fake_openai.OpenAI = fake_client
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+    return seen
+
+
+class RecordingAdapter:
+    def __init__(self, client, run_root, target_dir) -> None:
+        self.client = client
+        self.run_root = run_root
+        self.target_dir = target_dir
+
+
+def test_build_adapter_keys_off_the_protocol_provider(tmp_path: Path, monkeypatch) -> None:
+    target = tmp_path / "target"
+    write_protocol(target, "deepseek")
+    monkeypatch.setenv("MOONSHOT_API_KEY", "stale-kimi-key")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-key")
+    seen = install_fake_openai(monkeypatch)
+    monkeypatch.setattr(system_hint_adapter, "SystemHintAdapter", RecordingAdapter)
+
+    adapter = cli._build_adapter(argparse.Namespace(target_dir=target), tmp_path / "out")
+
+    assert seen["client"] == {
+        "api_key": "deepseek-key",
+        "base_url": "https://example.invalid/v1",
+    }
+    assert adapter.target_dir == target
+
+
+def test_build_adapter_reports_the_provider_whose_key_is_missing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    target = tmp_path / "target"
+    write_protocol(target, "deepseek")
+    monkeypatch.setenv("MOONSHOT_API_KEY", "stale-kimi-key")
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli._build_adapter(argparse.Namespace(target_dir=target), tmp_path / "out")
+
+    assert "DEEPSEEK_API_KEY" in str(excinfo.value)
