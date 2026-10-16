@@ -169,6 +169,36 @@ def test_on_round_is_called_once_per_round() -> None:
     assert seen == [1, 2]
 
 
+def test_baseline_is_run_once_and_reused_across_rollbacks() -> None:
+    adapter = adapter_for({"v0": set(ALL_IDS), "v1": set(), "v2": set()})
+
+    run_evolution(
+        adapter,
+        Proposer(model=system_prompt_edits("v1", "v2")),
+        baseline=Snapshot(system_prompt="v0"),
+        cases=CASES,
+        suites=("combined",),
+        label="combined",
+        rounds=2,
+        max_rollbacks=0,
+    )
+
+    baseline_runs = [snapshot for snapshot, _ in adapter.calls if snapshot.system_prompt == "v0"]
+    assert len(baseline_runs) == len(CASES)
+
+
+def test_workers_do_not_change_the_decision() -> None:
+    passing = {"v0": set(), "v1": set(ALL_IDS), "v2": set(ALL_IDS), "v3": set()}
+
+    sequential = run(passing, "v1", "v2", "v3", rounds=3, max_workers=1)
+    concurrent = run(passing, "v1", "v2", "v3", rounds=3, max_workers=4)
+
+    assert [record.accepted for record in concurrent.rounds] == [
+        record.accepted for record in sequential.rounds
+    ]
+    assert concurrent.baseline.system_prompt == sequential.baseline.system_prompt
+
+
 def test_save_run_writes_round_artifacts_and_history(tmp_path: Path) -> None:
     report = run({"v0": set(), "v1": set(ALL_IDS)}, "v1", rounds=1)
 

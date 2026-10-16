@@ -134,6 +134,7 @@ def _evaluate(args: argparse.Namespace) -> int:
         token_budget=args.token_budget,
         resamples=args.resamples,
         seed=args.seed,
+        max_workers=args.workers,
     )
     save_report(report, out_dir)
     print(render_report(report))
@@ -184,6 +185,7 @@ def _evolve(args: argparse.Namespace) -> int:
         max_rollbacks=args.max_rollbacks,
         resamples=args.resamples,
         seed=args.seed,
+        max_workers=args.workers,
         on_round=lambda record: print(_round_line(record)),
     )
     save_run(report, run_dir)
@@ -217,6 +219,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     evaluate_parser.add_argument("--resamples", type=int, default=DEFAULT_RESAMPLES)
     evaluate_parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     evaluate_parser.add_argument("--target-dir", type=Path, default=None)
+    evaluate_parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="episodes to run at once (default: AGENT_EVOLUTION_WORKERS, else 1)",
+    )
 
     evolve_parser = commands.add_parser(
         "evolve", help="search for a better harness over several rounds"
@@ -241,6 +249,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     evolve_parser.add_argument("--resamples", type=int, default=DEFAULT_RESAMPLES)
     evolve_parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     evolve_parser.add_argument("--target-dir", type=Path, default=None)
+    evolve_parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="episodes to run at once (default: AGENT_EVOLUTION_WORKERS, else 1)",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "evaluate":

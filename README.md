@@ -50,6 +50,7 @@ src/agent_evolution/
   snapshot.py           # Snapshot:声明式 harness 快照(diff/save/load/fingerprint)
   edit.py               # Edit:一处编辑 + 如何应用到快照
   paired.py             # 配对评测 + 接受/回滚判据
+  parallel.py           # 同一快照的 episode 批处理(默认顺序,可并发保序)
   proposer.py           # LLM 提案器(仅依赖 ProposerModel 协议,测试可脚本化)
   evolve.py             # 多轮进化循环、run 目录、history、预算
   cli.py                # 命令行:snapshot / evaluate / evolve
@@ -130,7 +131,13 @@ agent-evolution evolve --baseline snapshots/system-hint `
   --suite all --rounds 10 --out runs/evolve/my-run
 ```
 
-`evolve` 关键参数(默认值):`--suite combined`(可重复;`all` 展开为全部套件)、`--rounds 10`、`--max-failures 5`、`--max-rollbacks 3`、`--budget-tokens`(可选)、`--resamples 10000`、`--seed 20261015`。
+`evolve` 关键参数(默认值):`--suite combined`(可重复;`all` 展开为全部套件)、`--rounds 10`、`--max-failures 5`、`--max-rollbacks 3`、`--budget-tokens`(可选)、`--resamples 10000`、`--seed 20261015`、`--workers`(默认读 `AGENT_EVOLUTION_WORKERS`,否则 1)。
+
+### 提速
+
+- **并发**：`--workers N`(或环境变量 `AGENT_EVOLUTION_WORKERS=N`)并行跑同一快照的一批 episode(保序,上限为用例数)。默认 1 = 旧的顺序行为。`.env` 无此变量时行为逐字节不变。
+- **基线复用**：回滚后基线快照不变,其 episode 与提案器失败摘要跨轮复用,不再每轮重跑。
+- 二者只改「谁在跑 / 跑几次」,**不改变**接受/回滚判据与随机种子。详见 `docs/adr/0007`。
 
 ### 产物
 
@@ -140,6 +147,6 @@ agent-evolution evolve --baseline snapshots/system-hint `
 ## 文档索引
 
 - `GLOSSARY.md` —— 领域术语(唯一权威措辞)。
-- `docs/adr/0001`–`0006` —— 关键设计决策与取舍。
+- `docs/adr/0001`–`0007` —— 关键设计决策与取舍。
 - `docs/agents/` —— issue tracker、triage 标签、领域文档布局等仓库约定。
 - `AGENTS.md` —— 给 agent 的入口。

@@ -93,6 +93,27 @@ def test_evaluate_only_runs_the_requested_suite(tmp_path: Path, monkeypatch) -> 
     assert len(payload["cases"]) == 3
 
 
+def test_evaluate_passes_workers_to_the_report(tmp_path: Path, monkeypatch) -> None:
+    baseline, candidate, out = tmp_path / "baseline", tmp_path / "candidate", tmp_path / "out"
+    write_snapshot(baseline, "baseline")
+    write_snapshot(candidate, "candidate")
+    cases = combined_cases(3)
+    install_adapter(monkeypatch, cases, {case.case_id for case in cases})
+
+    seen: dict = {}
+    original = cli.evaluate
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "evaluate", spy)
+
+    cli.main(evaluate_args(baseline, candidate, out) + ["--workers", "3"])
+
+    assert seen["max_workers"] == 3
+
+
 def write_protocol(target: Path, provider: str, base_url: str = "https://example.invalid/v1") -> Path:
     target.mkdir(parents=True, exist_ok=True)
     path = target / "experiment_protocol.json"

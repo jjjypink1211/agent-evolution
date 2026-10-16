@@ -35,6 +35,7 @@ def run_evaluation(
     *,
     candidate_tokens: int = 5,
     token_budget: int | None = None,
+    max_workers: int | None = None,
 ):
     cases = tuple(CaseRef("combined", case_id) for case_id in baseline_passes)
 
@@ -54,6 +55,7 @@ def run_evaluation(
         cases=cases,
         suite="combined",
         token_budget=token_budget,
+        max_workers=max_workers,
     )
 
 
@@ -199,3 +201,34 @@ def test_baseline_results_must_line_up_with_cases() -> None:
             suite="combined",
             baseline_results=[episode(False)],
         )
+
+
+def test_arms_are_batched_not_interleaved() -> None:
+    cases = tuple(CaseRef("combined", case_id) for case_id in ids(4))
+    adapter = FakeAdapter(responder=lambda snapshot, case: episode(True))
+
+    evaluate(
+        adapter,
+        baseline=BASELINE,
+        candidate=CANDIDATE,
+        cases=cases,
+        suite="combined",
+        max_workers=3,
+    )
+
+    snapshots = [snapshot for snapshot, _ in adapter.calls]
+    first_candidate = snapshots.index(CANDIDATE)
+    assert all(snapshot is BASELINE for snapshot in snapshots[:first_candidate])
+    assert all(snapshot is CANDIDATE for snapshot in snapshots[first_candidate:])
+
+
+def test_workers_do_not_change_the_decision() -> None:
+    case_ids = ids(10)
+    candidate = dict.fromkeys(case_ids, False)
+    for case_id in case_ids[:8]:
+        candidate[case_id] = True
+
+    sequential = run_evaluation(dict.fromkeys(case_ids, False), candidate, max_workers=1)
+    concurrent = run_evaluation(dict.fromkeys(case_ids, False), candidate, max_workers=4)
+
+    assert report_payload(concurrent) == report_payload(sequential)

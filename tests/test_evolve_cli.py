@@ -81,6 +81,23 @@ def test_evolve_exits_zero_even_when_the_proposer_fails(tmp_path: Path, monkeypa
     assert payload["rounds_run"] == 0
 
 
+def test_evolve_passes_workers_to_the_loop(tmp_path: Path, monkeypatch) -> None:
+    seen: dict = {}
+    original = cli.run_evolution
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "run_evolution", spy)
+    adapter = FakeAdapter(responder=lambda snapshot, case: episode(True), cases=CASES)
+    install(monkeypatch, adapter, system_prompt_edits("v1"))
+
+    cli.main(evolve_args(baseline_dir(tmp_path), tmp_path / "run", "--rounds", "1", "--workers", "2"))
+
+    assert seen["max_workers"] == 2
+
+
 def test_select_suites_expands_all_and_dedupes() -> None:
     adapter = FakeAdapter(cases=(CaseRef("combined", "all-01"), CaseRef("todo_list", "todo-01")))
 

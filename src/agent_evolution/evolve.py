@@ -26,6 +26,7 @@ from agent_evolution.paired import (
     evaluate,
     save_report,
 )
+from agent_evolution.parallel import run_batch
 from agent_evolution.proposer import FailureReport, Proposal, ProposalError, Proposer
 from agent_evolution.snapshot import Snapshot
 
@@ -118,6 +119,7 @@ def run_evolution(
     max_rollbacks: int = DEFAULT_MAX_ROLLBACKS,
     resamples: int = DEFAULT_RESAMPLES,
     seed: int = DEFAULT_SEED,
+    max_workers: int | None = None,
     on_round: Callable[[RoundRecord], None] | None = None,
 ) -> RunReport:
     """Search for a better baseline over ``rounds`` rounds, keeping the winner.
@@ -130,6 +132,12 @@ def run_evolution(
     ``max_rollbacks`` (0 disables it) stops the run after that many consecutive
     rollbacks. ``max_failures`` caps how many failing episodes are shown to the
     proposer (0 shows none, a negative value shows all).
+
+    The baseline episodes are run once per distinct baseline and reused across
+    rounds (a rollback leaves the baseline unchanged, so its episodes and the
+    proposer's failure digests stay valid). ``max_workers`` runs a round's
+    episodes concurrently (see :mod:`agent_evolution.parallel`); it defaults to
+    the ``AGENT_EVOLUTION_WORKERS`` environment variable, else one.
     """
     records: list[RoundRecord] = []
     tokens_used = 0
@@ -138,6 +146,7 @@ def run_evolution(
     current = baseline
     stop_reason = StopReason.ROUNDS
     detail = ""
+    baseline_cache: dict[str, list[tuple[CaseRef, EpisodeResult]]] = {}
     if not cases:
         stop_reason = StopReason.NO_CASES
     else:
@@ -147,7 +156,10 @@ def run_evolution(
             ):
                 stop_reason = StopReason.BUDGET
                 break
-            baseline_outcomes = _run_cases(adapter, current, cases)
+            baseline_outcomes = baseline_cache.get(current.fingerprint())
+            if baseline_outcomes is None:
+                baseline_outcomes = _run_cases(adapter, current, cases, max_workers=max_workers)
+                baseline_cache[current.fingerprint()] = baseline_outcomes
             failures = _failure_reports(adapter, current, baseline_outcomes, max_failures)
             try:
                 proposal = proposer.propose(current, failures)
@@ -166,6 +178,7 @@ def run_evolution(
                 baseline_results=[result for _, result in baseline_outcomes],
                 resamples=resamples,
                 seed=seed,
+                max_workers=max_workers,
             )
             record = RoundRecord(index, current, candidate, proposal, report)
             records.append(record)
@@ -202,9 +215,14 @@ def _over_budget(spent: int, last_round: int, budget: int) -> bool:
 
 
 def _run_cases(
-    adapter: Adapter, snapshot: Snapshot, cases: Sequence[CaseRef]
+    adapter: Adapter,
+    snapshot: Snapshot,
+    cases: Sequence[CaseRef],
+    *,
+    max_workers: int | None = None,
 ) -> list[tuple[CaseRef, EpisodeResult]]:
-    return [(case, adapter.run(snapshot, case)) for case in cases]
+    results = run_batch(adapter, snapshot, cases, max_workers=max_workers)
+    return list(zip(cases, results))
 
 
 def _failure_reports(

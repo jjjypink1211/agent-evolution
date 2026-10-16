@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Sequence
 
 from agent_evolution.adapter import Adapter, CaseRef, EpisodeResult
+from agent_evolution.parallel import run_batch
 from agent_evolution.snapshot import Snapshot
 
 DEFAULT_RESAMPLES = 10000
@@ -87,31 +88,52 @@ class PairedReport:
 
 
 def paired_outcomes(
-    adapter: Adapter, baseline: Snapshot, candidate: Snapshot, cases: Sequence[CaseRef]
+    adapter: Adapter,
+    baseline: Snapshot,
+    candidate: Snapshot,
+    cases: Sequence[CaseRef],
+    *,
+    max_workers: int | None = None,
 ) -> tuple[CaseOutcome, ...]:
-    """Run every case against both snapshots and pair the results."""
+    """Run every case against both snapshots and pair the results.
+
+    The two arms run one whole batch after the other - never interleaved - so
+    only one snapshot is in flight at a time (the target loop keeps its loaded
+    harness in a module-global). ``max_workers`` runs each batch's episodes
+    concurrently; see :mod:`agent_evolution.parallel`.
+    """
+    ordered = list(cases)
+    baseline_results = run_batch(adapter, baseline, ordered, max_workers=max_workers)
+    candidate_results = run_batch(adapter, candidate, ordered, max_workers=max_workers)
     return tuple(
-        CaseOutcome(case, adapter.run(baseline, case), adapter.run(candidate, case))
-        for case in cases
+        CaseOutcome(case, base, cand)
+        for case, base, cand in zip(ordered, baseline_results, candidate_results)
     )
 
 
 def candidate_outcomes(
-    adapter: Adapter, candidate: Snapshot, cases: Sequence[CaseRef], baseline_results: Sequence[EpisodeResult]
+    adapter: Adapter,
+    candidate: Snapshot,
+    cases: Sequence[CaseRef],
+    baseline_results: Sequence[EpisodeResult],
+    *,
+    max_workers: int | None = None,
 ) -> tuple[CaseOutcome, ...]:
     """Pair precomputed baseline episodes with freshly run candidate episodes.
 
     The evolution loop has already run the baseline to gather the proposer's
     failure digests, so it hands those episodes in rather than paying to run the
-    same baseline twice in one round.
+    same baseline twice in one round. ``max_workers`` runs the candidate episodes
+    concurrently; see :mod:`agent_evolution.parallel`.
     """
     if len(baseline_results) != len(cases):
         raise ValueError(
             f"baseline_results has {len(baseline_results)} episodes for {len(cases)} cases"
         )
+    candidate_results = run_batch(adapter, candidate, list(cases), max_workers=max_workers)
     return tuple(
-        CaseOutcome(case, result, adapter.run(candidate, case))
-        for case, result in zip(cases, baseline_results)
+        CaseOutcome(case, base, cand)
+        for case, base, cand in zip(cases, baseline_results, candidate_results)
     )
 
 
@@ -151,6 +173,7 @@ def evaluate(
     resamples: int = DEFAULT_RESAMPLES,
     seed: int = DEFAULT_SEED,
     confidence: float = DEFAULT_CONFIDENCE,
+    max_workers: int | None = None,
 ) -> PairedReport:
     """Pair-evaluate ``candidate`` against ``baseline`` and decide keep-or-revert.
 
@@ -162,12 +185,14 @@ def evaluate(
     ``baseline_results`` lets a caller that has already run the baseline episodes
     (the evolution loop, to build the proposer's failure digests) reuse them
     instead of running the baseline a second time; it must line up one-to-one with
-    ``cases``.
+    ``cases``. ``max_workers`` runs each arm's episodes concurrently.
     """
     if baseline_results is None:
-        outcomes = paired_outcomes(adapter, baseline, candidate, cases)
+        outcomes = paired_outcomes(adapter, baseline, candidate, cases, max_workers=max_workers)
     else:
-        outcomes = candidate_outcomes(adapter, candidate, cases, baseline_results)
+        outcomes = candidate_outcomes(
+            adapter, candidate, cases, baseline_results, max_workers=max_workers
+        )
     baseline_passes = sum(int(outcome.baseline.objective_pass) for outcome in outcomes)
     candidate_passes = sum(int(outcome.candidate.objective_pass) for outcome in outcomes)
     baseline_tokens = sum(outcome.baseline.tokens for outcome in outcomes)
