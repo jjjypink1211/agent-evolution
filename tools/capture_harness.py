@@ -18,15 +18,20 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from agent_evolution.snapshot import Snapshot
-from agent_evolution.target_harness import FEATURES, extract
+from agent_evolution.target_harness import (
+    DEFAULT_TARGET_DIR,
+    FEATURES,
+    TARGET_MODULE_NAME,
+    extract,
+)
 
-DEFAULT_TARGET = Path(r"C:\agent\ai-agent-book\chapter2\system-hint")
+DEFAULT_TARGET = DEFAULT_TARGET_DIR
 DEFAULT_SNAPSHOT = REPO_ROOT / "snapshots" / "system-hint"
 DEFAULT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "system_hint_harness.json"
 
 
 def capture(target: Path, snapshot_dir: Path, fixture_path: Path) -> Snapshot:
-    module_path = target / "run_experiment_2_8.py"
+    module_path = target / TARGET_MODULE_NAME
     if not module_path.is_file():
         raise FileNotFoundError(f"target harness not found at {module_path}")
     harness = extract(module_path)

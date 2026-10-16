@@ -8,9 +8,13 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
-from agent_evolution.snapshot import Change, Snapshot
+from agent_evolution.snapshot import Change, ChangeKind, Snapshot
 
-_MARKERS = {"added": "+", "removed": "-", "changed": "~"}
+_MARKERS = {
+    ChangeKind.ADDED: "+",
+    ChangeKind.REMOVED: "-",
+    ChangeKind.CHANGED: "~",
+}
 _MAX_SUMMARY = 120
 
 
@@ -32,10 +36,10 @@ def _summarize(value: Any) -> str:
 
 
 def _format_change(change: Change) -> str:
-    marker = _MARKERS.get(change.kind, "?")
-    if change.kind == "added":
+    marker = _MARKERS[change.kind]
+    if change.kind is ChangeKind.ADDED:
         return f"{marker} {change.key}: {_summarize(change.after)}"
-    if change.kind == "removed":
+    if change.kind is ChangeKind.REMOVED:
         return f"{marker} {change.key}: {_summarize(change.before)}"
     return (
         f"{marker} {change.key}: "

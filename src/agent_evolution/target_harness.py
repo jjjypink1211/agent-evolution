@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import os
 import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from agent_evolution.snapshot import RENDERED_PLACEHOLDER
 
 SUITES = ("timestamps", "tool_counter", "todo_list", "detailed_errors", "system_state", "combined")
 
@@ -31,7 +34,14 @@ SYSTEM_PROMPT_PREFIX = "You are an audited local-sandbox agent"
 ENVELOPE_PREFIX = "<agent_status>\n"
 ENVELOPE_SUFFIX = "\n</agent_status>"
 
-RENDERED_PLACEHOLDER = "{rendered}"
+TARGET_ENV_VAR = "AI_AGENT_BOOK_TARGET"
+DEFAULT_TARGET_DIR = Path(r"C:\agent\ai-agent-book\chapter2\system-hint")
+TARGET_MODULE_NAME = "run_experiment_2_8.py"
+
+
+def resolve_target_dir() -> Path:
+    """Locate the system-hint target, honouring the ``AI_AGENT_BOOK_TARGET`` override."""
+    return Path(os.environ.get(TARGET_ENV_VAR, DEFAULT_TARGET_DIR))
 
 
 @dataclass(frozen=True)
@@ -157,14 +167,18 @@ def extract(module_path: Path) -> dict[str, Any]:
 
 
 __all__ = [
+    "DEFAULT_TARGET_DIR",
     "FEATURES",
     "STATUS_CASES",
     "SUITES",
+    "TARGET_ENV_VAR",
+    "TARGET_MODULE_NAME",
     "StatusCase",
     "extract",
     "load_module",
-    "system_prompt",
-    "tool_descriptions",
+    "resolve_target_dir",
     "status_section",
     "status_template",
+    "system_prompt",
+    "tool_descriptions",
 ]

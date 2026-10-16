@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from agent_evolution import target_harness
 from agent_evolution.snapshot import Snapshot
 
@@ -16,6 +18,16 @@ TASK_TEXT_FRAGMENTS = (
 )
 
 
+def harness_text(snapshot: Snapshot) -> str:
+    return "\n".join(
+        [
+            snapshot.system_prompt,
+            *snapshot.status_sections.values(),
+            *snapshot.tool_descriptions.values(),
+        ]
+    )
+
+
 def test_default_snapshot_matches_golden_fixture(
     default_snapshot_path: Path, harness_fixture: dict
 ) -> None:
@@ -26,10 +38,7 @@ def test_default_snapshot_matches_golden_fixture(
 
 
 def test_default_snapshot_excludes_task_text(default_snapshot_path: Path) -> None:
-    snapshot = Snapshot.load(default_snapshot_path)
-    blob = "\n".join(
-        [snapshot.system_prompt, *snapshot.status_sections.values(), *snapshot.tool_descriptions.values()]
-    )
+    blob = harness_text(Snapshot.load(default_snapshot_path))
     for fragment in TASK_TEXT_FRAGMENTS:
         assert fragment not in blob
 
@@ -60,13 +69,30 @@ def test_snapshot_renders_byte_identical_to_live_target(
             assert snapshot.tool_descriptions[name] == tool["function"]["description"]
 
 
+def test_no_task_prompt_leaks_into_the_snapshot(
+    target_module_path: Path, default_snapshot_path: Path
+) -> None:
+    protocol_path = target_module_path.parent / "experiment_protocol.json"
+    if not protocol_path.is_file():
+        pytest.skip(f"protocol not found at {protocol_path}")
+    module = target_harness.load_module(target_module_path)
+    protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
+    prompts = [
+        module.case_prompt(suite, case)
+        for suite, cases in protocol["cases"].items()
+        for case in cases
+    ]
+    assert prompts
+    blob = harness_text(Snapshot.load(default_snapshot_path))
+    for prompt in prompts:
+        assert prompt not in blob
+
+
 def test_default_features_match_protocol_conditions(
     target_module_path: Path, default_snapshot_path: Path
 ) -> None:
     protocol_path = target_module_path.parent / "experiment_protocol.json"
     if not protocol_path.is_file():
-        import pytest
-
         pytest.skip(f"protocol not found at {protocol_path}")
     protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
     union = sorted({feature for condition in protocol["conditions"].values() for feature in condition})

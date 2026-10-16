@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
@@ -21,7 +22,7 @@ SYSTEM_PROMPT_NAME = "system_prompt.txt"
 STATUS_DIR = "status"
 TOOLS_DIR = "tools"
 
-_RENDERED_PLACEHOLDER = "{rendered}"
+RENDERED_PLACEHOLDER = "{rendered}"
 _KEY_PATTERN = re.compile(r"^[a-z0-9_]+$")
 
 
@@ -29,11 +30,19 @@ class SnapshotError(ValueError):
     """Raised when a snapshot on disk is malformed."""
 
 
+class ChangeKind(StrEnum):
+    """How one field differs between two snapshots."""
+
+    ADDED = "added"
+    REMOVED = "removed"
+    CHANGED = "changed"
+
+
 @dataclass(frozen=True)
 class Change:
     """One field-level difference between two snapshots."""
 
-    kind: str
+    kind: ChangeKind
     key: str
     before: Any = None
     after: Any = None
@@ -64,11 +73,11 @@ def _load_group(directory: Path) -> dict[str, str]:
 def _diff_group(group: str, before: Mapping[str, str], after: Mapping[str, str]) -> Iterator[Change]:
     for key in sorted(set(before) | set(after)):
         if key not in before:
-            yield Change("added", f"{group}[{key}]", None, after[key])
+            yield Change(ChangeKind.ADDED, f"{group}[{key}]", None, after[key])
         elif key not in after:
-            yield Change("removed", f"{group}[{key}]", before[key], None)
+            yield Change(ChangeKind.REMOVED, f"{group}[{key}]", before[key], None)
         elif before[key] != after[key]:
-            yield Change("changed", f"{group}[{key}]", before[key], after[key])
+            yield Change(ChangeKind.CHANGED, f"{group}[{key}]", before[key], after[key])
 
 
 @dataclass(frozen=True)
@@ -139,15 +148,30 @@ class Snapshot:
         """Return the field-level differences from this snapshot to ``other``."""
         changes: list[Change] = []
         if self.schema_version != other.schema_version:
-            changes.append(Change("changed", "schema_version", self.schema_version, other.schema_version))
+            changes.append(
+                Change(ChangeKind.CHANGED, "schema_version", self.schema_version, other.schema_version)
+            )
         if self.features != other.features:
-            changes.append(Change("changed", "features", list(self.features), list(other.features)))
+            changes.append(
+                Change(ChangeKind.CHANGED, "features", list(self.features), list(other.features))
+            )
         if self.system_prompt != other.system_prompt:
-            changes.append(Change("changed", "system_prompt", self.system_prompt, other.system_prompt))
+            changes.append(
+                Change(ChangeKind.CHANGED, "system_prompt", self.system_prompt, other.system_prompt)
+            )
         changes.extend(_diff_group(STATUS_DIR, self.status_sections, other.status_sections))
         changes.extend(_diff_group(TOOLS_DIR, self.tool_descriptions, other.tool_descriptions))
         changes.sort(key=lambda change: (change.key, change.kind))
         return tuple(changes)
 
 
-__all__ = ["Change", "Snapshot", "SnapshotError", "SCHEMA_VERSION"]
+__all__ = [
+    "Change",
+    "ChangeKind",
+    "RENDERED_PLACEHOLDER",
+    "SCHEMA_VERSION",
+    "Snapshot",
+    "SnapshotError",
+    "STATUS_DIR",
+    "TOOLS_DIR",
+]
