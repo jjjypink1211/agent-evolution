@@ -10,12 +10,26 @@ import pytest
 from agent_evolution.adapter import CaseRef
 from agent_evolution.snapshot import Snapshot
 from agent_evolution.system_hint_adapter import SystemHintAdapter
-from agent_evolution.target_harness import resolve_target_dir
+from agent_evolution.target_harness import TARGET_MODULE_NAME, resolve_target_dir
 
 from replay_client import ReplayClient, recorded_responses
 
 CAMPAIGN = "exp2-8-kimi-k3-20260730-v1"
 COMBINED_IDS = ("all-01", "all-02", "all-03", "all-04", "all-05")
+
+
+def edited_snapshot(base: Snapshot, system_prompt: str) -> Snapshot:
+    return Snapshot(
+        features=base.features,
+        system_prompt=system_prompt,
+        status_sections=base.status_sections,
+        tool_descriptions=base.tool_descriptions,
+    )
+
+
+def require_target() -> None:
+    if not (resolve_target_dir() / TARGET_MODULE_NAME).is_file():
+        pytest.skip("system-hint target not found")
 
 
 def recorded_case_path(case_id: str, condition: str = "combined") -> Path:
@@ -72,12 +86,7 @@ def test_episode_request_uses_the_supplied_snapshot(
     tmp_path: Path, default_snapshot_path: Path
 ) -> None:
     base = Snapshot.load(default_snapshot_path)
-    edited = Snapshot(
-        features=base.features,
-        system_prompt="SNAPSHOT-MARKER-SYSTEM-PROMPT",
-        status_sections=base.status_sections,
-        tool_descriptions=base.tool_descriptions,
-    )
+    edited = edited_snapshot(base, "SNAPSHOT-MARKER-SYSTEM-PROMPT")
 
     _, client, _ = run_recorded("all-01", edited, tmp_path)
 
@@ -87,3 +96,36 @@ def test_episode_request_uses_the_supplied_snapshot(
     ]
     assert system_messages
     assert system_messages[0]["content"] == "SNAPSHOT-MARKER-SYSTEM-PROMPT"
+
+
+def test_distinct_snapshots_use_distinct_evidence_dirs(
+    tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    require_target()
+    adapter = SystemHintAdapter(client=object(), run_root=tmp_path)
+    base = Snapshot.load(default_snapshot_path)
+    case = CaseRef("combined", "all-01")
+
+    assert adapter.episode_dir(base, case) == adapter.episode_dir(base, case)
+    assert adapter.episode_dir(base, case) != adapter.episode_dir(edited_snapshot(base, "x"), case)
+
+
+def test_paired_arms_keep_separate_evidence_on_disk(
+    tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    case_path = recorded_case_path("all-01")
+    if not case_path.is_file():
+        pytest.skip(f"recorded case not found at {case_path}")
+    recorded = json.loads(case_path.read_text(encoding="utf-8"))
+    responses = recorded_responses(case_path)
+    adapter = SystemHintAdapter(client=ReplayClient(responses + responses), run_root=tmp_path)
+    base = Snapshot.load(default_snapshot_path)
+    case = CaseRef("combined", "all-01")
+
+    baseline = adapter.run(base, case)
+    candidate = adapter.run(edited_snapshot(base, "SNAPSHOT-MARKER"), case)
+
+    assert baseline.evidence_path != candidate.evidence_path
+    assert baseline.evidence_path.is_file()
+    assert candidate.evidence_path.is_file()
+    assert baseline.objective_pass == candidate.objective_pass == recorded["objective_pass"]

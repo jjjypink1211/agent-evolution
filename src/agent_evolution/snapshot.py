@@ -9,6 +9,7 @@ remains the target protocol's decision, not the snapshot's.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -103,6 +104,22 @@ class Snapshot:
     def render_status_section(self, feature: str, rendered: str) -> str:
         """Render one ``<agent_status>`` section template with its dynamic tail."""
         return self.status_sections[feature].format(rendered=rendered)
+
+    def fingerprint(self) -> str:
+        """A stable content hash of the harness surface, for evidence isolation."""
+        payload = json.dumps(
+            {
+                "schema_version": self.schema_version,
+                "features": list(self.features),
+                "system_prompt": self.system_prompt,
+                "status_sections": dict(sorted(self.status_sections.items())),
+                "tool_descriptions": dict(sorted(self.tool_descriptions.items())),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()[:16]
 
     def save(self, root: Path) -> None:
         """Write this snapshot to a directory, replacing any stale contents."""

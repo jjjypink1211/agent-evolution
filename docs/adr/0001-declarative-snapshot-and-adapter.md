@@ -9,7 +9,7 @@
 
 ## Decision
 
-把 harness 表示为**声明式快照目录**（system prompt 文本 + 工具描述/schema + 控制参数），loop 的控制流代码保持不动；进化器通过**通用适配器接缝**接入任意 loop——适配器对上层只暴露「给定快照 + 用例 → trajectory + 门禁结果」。
+把 harness 表示为**声明式快照目录**（system prompt 文本 + 工具描述/schema + 控制参数），loop 的控制流代码保持不动；进化器通过**通用适配器接缝**接入任意 loop——适配器对上层暴露两件事：**枚举某套件的用例**（`cases_for(suite) -> CaseRef`），以及**给定快照 + 用例 → trajectory + 门禁结果**（`run(snapshot, case) -> EpisodeResult`）。评测器因此保持 target-agnostic：它只吃显式用例列表，由调用方决定用哪套件。
 
 快照只承载 **harness**（agent 脚手架）：system prompt、`<agent_status>` 段模板、工具描述文本，以及启用的 feature 名录。**任务文本（`case_prompt`）不属于快照**——它属于任务/输入侧，随 protocol 用例保存。
 

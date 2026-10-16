@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Protocol, runtime_checkable
+from typing import Mapping, Protocol, Sequence, runtime_checkable
 
 from agent_evolution.snapshot import Snapshot
 
@@ -49,6 +49,10 @@ class Adapter(Protocol):
 
     def run(self, snapshot: Snapshot, case: CaseRef) -> EpisodeResult:
         """Run ``case`` against ``snapshot`` and return its normalised result."""
+        ...
+
+    def cases_for(self, suite: str) -> Sequence[CaseRef]:
+        """Return the cases that make up ``suite``."""
         ...
 
 

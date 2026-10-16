@@ -25,8 +25,12 @@ class FakeAdapter:
     """Record the calls it receives and return scripted results, with no network."""
 
     responder: Callable[[Snapshot, CaseRef], EpisodeResult] = _always_passes
+    cases: tuple[CaseRef, ...] = ()
     calls: list[tuple[Snapshot, CaseRef]] = field(default_factory=list)
 
     def run(self, snapshot: Snapshot, case: CaseRef) -> EpisodeResult:
         self.calls.append((snapshot, case))
         return self.responder(snapshot, case)
+
+    def cases_for(self, suite: str) -> tuple[CaseRef, ...]:
+        return tuple(case for case in self.cases if case.suite == suite)

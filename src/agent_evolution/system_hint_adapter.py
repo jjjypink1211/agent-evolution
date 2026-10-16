@@ -59,8 +59,8 @@ class SystemHintAdapter:
         order = self._module.condition_order(case.suite, index)
         if condition not in order:
             raise ValueError(f"condition {condition!r} is not in {case.suite}'s arm order {order}")
-        run_id = f"{case.suite}__{case.case_id}__{condition}"
-        episode_dir = self.run_root / run_id
+        run_id = self._run_id(case, condition)
+        episode_dir = self.run_root / snapshot.fingerprint() / run_id
         episode_dir.mkdir(parents=True, exist_ok=True)
         harness_dir = episode_dir / self._module.HARNESS_DIR_NAME
         snapshot.save(harness_dir)
@@ -84,11 +84,31 @@ class SystemHintAdapter:
             evidence_path=episode_dir / "cases" / f"{run_id}.json",
         )
 
-    def _resolve_case(self, case: CaseRef) -> tuple[int, dict[str, Any]]:
-        cases = self._protocol["cases"].get(case.suite)
+    def episode_dir(self, snapshot: Snapshot, case: CaseRef) -> Path:
+        """Where ``case``'s evidence lives for ``snapshot``.
+
+        Keyed by the snapshot's fingerprint so the baseline and the candidate of a
+        paired run never overwrite (or resume) each other's episodes.
+        """
+        condition = case.condition or enabled_condition(self._protocol, case.suite)
+        return self.run_root / snapshot.fingerprint() / self._run_id(case, condition)
+
+    @staticmethod
+    def _run_id(case: CaseRef, condition: str) -> str:
+        return f"{case.suite}__{case.case_id}__{condition}"
+
+    def cases_for(self, suite: str) -> tuple[CaseRef, ...]:
+        """Return the protocol's cases for ``suite``, each with its default condition."""
+        return tuple(CaseRef(suite, protocol_case["id"]) for protocol_case in self._suite_cases(suite))
+
+    def _suite_cases(self, suite: str) -> list[dict[str, Any]]:
+        cases = self._protocol["cases"].get(suite)
         if cases is None:
-            raise KeyError(f"unknown suite {case.suite!r}")
-        for index, protocol_case in enumerate(cases):
+            raise KeyError(f"unknown suite {suite!r}")
+        return cases
+
+    def _resolve_case(self, case: CaseRef) -> tuple[int, dict[str, Any]]:
+        for index, protocol_case in enumerate(self._suite_cases(case.suite)):
             if protocol_case["id"] == case.case_id:
                 return index, protocol_case
         raise KeyError(f"unknown case {case.suite}/{case.case_id}")

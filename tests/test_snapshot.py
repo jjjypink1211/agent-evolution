@@ -174,3 +174,31 @@ def test_load_preserves_multi_line_sections(tmp_path: Path) -> None:
         "TOOL COUNTS: {rendered}.\nSwitch to a fallback."
     )
 
+
+def test_fingerprint_is_content_addressed(tmp_path: Path) -> None:
+    root = tmp_path / "system-hint"
+    sample().save(root)
+    assert Snapshot.load(root).fingerprint() == sample().fingerprint()
+
+
+def test_fingerprint_ignores_section_order() -> None:
+    first = Snapshot(
+        status_sections={"tool_counter": "A", "todo_list": "B"},
+        tool_descriptions={"read_record": "C", "submit_result": "D"},
+    )
+    second = Snapshot(
+        status_sections={"todo_list": "B", "tool_counter": "A"},
+        tool_descriptions={"submit_result": "D", "read_record": "C"},
+    )
+    assert first.fingerprint() == second.fingerprint()
+
+
+def test_fingerprint_changes_with_the_harness_surface() -> None:
+    assert sample().fingerprint() != Snapshot(system_prompt="different").fingerprint()
+
+
+def test_fingerprint_is_short_and_filesystem_safe() -> None:
+    fingerprint = sample().fingerprint()
+    assert fingerprint.isalnum()
+    assert 8 <= len(fingerprint) <= 32
+
