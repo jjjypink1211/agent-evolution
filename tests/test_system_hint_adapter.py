@@ -1,8 +1,13 @@
-"""SystemHintAdapter reproduces the target's own gates, offline, from recordings."""
+"""SystemHintAdapter reproduces the target's own gates, offline, from recordings.
+
+It also drives the target with an evidence-only policy double, to prove that a
+snapshot feature flip reaches the objective gate (see ADR-0006).
+"""
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -12,6 +17,7 @@ from agent_evolution.snapshot import Snapshot
 from agent_evolution.system_hint_adapter import SystemHintAdapter, provider_key_vars, resolve_api_key
 from agent_evolution.target_harness import TARGET_MODULE_NAME, resolve_target_dir
 
+from policy_client import EvidencePolicyClient
 from replay_client import ReplayClient, recorded_responses
 
 CAMPAIGN = "exp2-8-kimi-k3-20260730-v1"
@@ -22,6 +28,15 @@ def edited_snapshot(base: Snapshot, system_prompt: str) -> Snapshot:
     return Snapshot(
         features=base.features,
         system_prompt=system_prompt,
+        status_sections=base.status_sections,
+        tool_descriptions=base.tool_descriptions,
+    )
+
+
+def without_feature(base: Snapshot, feature: str) -> Snapshot:
+    return Snapshot(
+        features=tuple(name for name in base.features if name != feature),
+        system_prompt=base.system_prompt,
         status_sections=base.status_sections,
         tool_descriptions=base.tool_descriptions,
     )
@@ -148,6 +163,52 @@ def test_paired_arms_keep_separate_evidence_on_disk(
     assert baseline.evidence_path.is_file()
     assert candidate.evidence_path.is_file()
     assert baseline.objective_pass == candidate.objective_pass == recorded["objective_pass"]
+
+
+def run_policy(
+    snapshot: Snapshot, case_id: str, run_root: Path
+) -> tuple[EvidencePolicyClient, object]:
+    client = EvidencePolicyClient()
+    adapter = SystemHintAdapter(client=client, run_root=run_root)
+    return client, adapter.run(snapshot, CaseRef("combined", case_id))
+
+
+def test_flipping_a_feature_off_moves_the_objective_gate(
+    tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    require_target()
+    base = Snapshot.load(default_snapshot_path)
+
+    _, enabled = run_policy(base, "all-01", tmp_path)
+    _, disabled = run_policy(without_feature(base, "timestamps"), "all-01", tmp_path)
+
+    assert dict(enabled.component_scores) == {
+        "timestamps": True,
+        "tool_counter": True,
+        "todo_list": True,
+        "detailed_errors": True,
+        "system_state": True,
+    }
+    assert enabled.objective_pass is True
+    assert disabled.component_scores["timestamps"] is False
+    assert all(
+        ok for name, ok in disabled.component_scores.items() if name != "timestamps"
+    )
+    assert disabled.objective_pass is False
+
+
+def test_feature_flip_reaches_the_surface_the_agent_sees(
+    tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    require_target()
+    base = Snapshot.load(default_snapshot_path)
+
+    on_client, _ = run_policy(base, "all-01", tmp_path)
+    off_client, _ = run_policy(without_feature(base, "timestamps"), "all-01", tmp_path)
+
+    stamp = re.compile(r"\[2025-\d\d-\d\d [\d:]{8}\]")
+    assert stamp.search(json.dumps(on_client.requests, ensure_ascii=False))
+    assert not stamp.search(json.dumps(off_client.requests, ensure_ascii=False))
 
 
 def test_provider_key_vars_follow_the_named_provider() -> None:

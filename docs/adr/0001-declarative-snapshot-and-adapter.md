@@ -33,3 +33,4 @@
 - **枚举套件用例**（ticket #5）：`cases_for(suite) -> CaseRef`，让评测器吃显式用例列表而保持 target-agnostic。
 - **把一次失败渲染成人读摘要**（ticket #6，见 ADR-0004）：`failure_digest(snapshot, case, result) -> str`。相应地把「trajectory 穿过接缝」收敛为「门禁结果穿过接缝、轨迹只在摘要里被渲染」，上层因此不依赖任何目标的证据格式。
 - **列出目标定义的套件**（ticket #7，见 ADR-0005）：`suites() -> Sequence[str]`，让进化循环把 `--suite all` 展开成全量运行，而不必自己知道某个目标的 protocol。
+- **把启用 feature 并回快照**（ticket #8，见 ADR-0006）：`HarnessSnapshot` 长出 `features`，一次 run 实际启用的 feature 改为「快照 features ∩ 臂的 condition 列表」。据此，本节 Consequences 里「启用 feature 仍取自 protocol 的 conditions」一条由 ADR-0006 取代——Decision 原文「快照承载启用的 feature 名录」由此落回实现。

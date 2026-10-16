@@ -12,6 +12,10 @@ _Avoid_: agent, 提示词, 配置
 harness 的一份声明式、可 diff 表示，落在快照目录里。
 _Avoid_: 版本, 配置包
 
+**Feature（特性开关）**:
+harness 上一个可开关的干预：开启后 loop 会改变它写给模型的状态段、工具结果或工具集。一次 run 实际启用的是「快照的 features ∩ 该臂 protocol condition 列表」的交集，故快照与 protocol 共同决定——臂未列出的 feature 翻转是 no-op。
+_Avoid_: 开关, flag, 选项
+
 **进化 (Evolution)**:
 离线过程：提案器提出快照编辑，跑配对 episode 打分，据此保留或回滚。不是运行时自适应。
 _Avoid_: 训练, 微调, 学习

@@ -4,10 +4,10 @@ The proposer emits exactly one :class:`Edit`. Keeping the edit typed (rather tha
 a patch string) makes "one edit" checkable, keeps the loop deterministic, and lets
 the change be described both to a human and back to the model.
 
-A ``FEATURE`` edit rewrites the snapshot's feature catalogue, which is a legitimate
-edit here; whether it changes anything is the target's business - the system-hint
-target still derives its enabled features from the protocol condition, so against
-it a feature flip alone is inert (see ADR-0004's known limitation).
+A ``FEATURE`` edit turns one harness feature on or off in the snapshot, which is a
+legitimate edit here; what it changes is the target's business - a target enables
+the intersection of the snapshot's features with the arm's protocol condition list,
+so flipping a feature the arm does not list is a no-op (ADR-0006).
 """
 
 from __future__ import annotations

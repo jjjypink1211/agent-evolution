@@ -39,7 +39,8 @@ An edit is a JSON object with these fields:
 
 Rules:
 - Propose exactly one edit that changes exactly one thing.
-- A "feature" edit turns one catalogue feature {ON} or {OFF}.
+- A "feature" edit turns one harness feature {ON} or {OFF}. A feature the arm's
+  condition list does not include has no effect on the episode and will be rolled back.
 - Do not re-apply an edit that is already in effect.
 - Reply with only a JSON object of the form {{"edit": {{ ... }}}}: no prose, no code fences.
 """

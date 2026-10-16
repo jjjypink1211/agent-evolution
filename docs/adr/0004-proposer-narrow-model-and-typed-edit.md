@@ -30,8 +30,10 @@
 - 重试会重复计费 token，故端与修复上限都在提案器侧显式可配；候选是否采纳仍由配对评测决定，提案器不参与判定。
 - **理由必填**：规格要求「一处编辑 **+ 理由**」，故提案器路径要求 `reason` 非空，缺失即按不可用回复走修复重试（`Edit` 本身仍允许空 `reason`，便于程序化构造）。
 
-## Known limitation: a feature flip is inert against the current target
+## Known limitation: a feature flip is inert against the current target（已由 ADR-0006 解除）
 
 `EditKind.FEATURE` 是合法、可应用、可 diff 的快照编辑，但对首个目标**不改变 episode 行为**：目标从 protocol 的 condition 推导启用 feature（`run_experiment_2_8.py` 的 `features = set(protocol["conditions"][condition])`），其 `HarnessSnapshot` 不含 `features` 字段，快照里的 `features` 目前只是「已知 feature 名录」（见 ADR-0001 的 Consequences 与 `snapshot.py`）。因此该编辑会被配对评测一律回滚。
 
 让 feature 翻转生效需要重开 ADR-0001 中「启用哪些 feature 归 protocol 决定」这一条（或由适配器把快照的 feature 集合桥接进 condition），已另开 follow-up issue（#8）跟踪，不在本 ADR 范围。
+
+**后续（ticket #8，见 ADR-0006）**：`HarnessSnapshot` 已长出 `features`，一次 run 的启用集合改为「快照 features ∩ 臂的 condition 列表」，`FEATURE` 编辑因此对首个目标真正生效。本节保留为历史记录。
