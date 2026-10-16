@@ -20,6 +20,7 @@ from agent_evolution.target_harness import TARGET_MODULE_NAME, load_module, reso
 from agent_evolution.text import clip
 
 PROTOCOL_NAME = "experiment_protocol.json"
+PROTOCOL_ENV_VAR = "AGENT_EVOLUTION_PROTOCOL"
 
 DIGEST_TURN_LIMIT = 24
 DIGEST_CHARS = 400
@@ -72,6 +73,22 @@ def resolve_api_key(provider: str, env: Mapping[str, str] | None = None) -> str 
     return None
 
 
+def resolve_protocol_path(target_dir: Path, protocol_path: Path | str | None = None) -> Path:
+    """The protocol file to read: an explicit path, the env override, else the target's own.
+
+    The target ships a frozen ``experiment_protocol.json`` that anchors published
+    evidence. An evolution-only protocol (for example a wider case set) can be
+    pointed at with ``protocol_path`` or ``AGENT_EVOLUTION_PROTOCOL`` without
+    touching the frozen artifact; absent either, the target's own protocol is used.
+    """
+    if protocol_path is not None:
+        return Path(protocol_path)
+    override = os.environ.get(PROTOCOL_ENV_VAR, "").strip()
+    if override:
+        return Path(override)
+    return Path(target_dir) / PROTOCOL_NAME
+
+
 def enabled_condition(protocol: Mapping[str, Any], suite: str) -> str:
     """Return the intervention condition a suite's contrast turns on."""
     for contrast in protocol["contrasts"]:
@@ -88,6 +105,7 @@ class SystemHintAdapter:
         client: Any,
         run_root: Path | None = None,
         target_dir: Path | None = None,
+        protocol_path: Path | str | None = None,
     ) -> None:
         self.client = client
         self.target_dir = Path(target_dir) if target_dir is not None else resolve_target_dir()
@@ -95,7 +113,8 @@ class SystemHintAdapter:
         if not module_path.is_file():
             raise FileNotFoundError(f"system-hint target not found at {module_path}")
         self._module = load_module(module_path)
-        self._protocol_bytes = (self.target_dir / PROTOCOL_NAME).read_bytes()
+        self.protocol_path = resolve_protocol_path(self.target_dir, protocol_path)
+        self._protocol_bytes = self.protocol_path.read_bytes()
         self._protocol = json.loads(self._protocol_bytes)
         self._protocol_hash = hashlib.sha256(self._protocol_bytes).hexdigest()
         self._temp_root: tempfile.TemporaryDirectory | None = None
@@ -194,10 +213,13 @@ class SystemHintAdapter:
 
 
 __all__ = [
+    "PROTOCOL_ENV_VAR",
+    "PROTOCOL_NAME",
     "PROVIDER_ALIASES",
     "PROVIDER_KEY_VARS",
     "SystemHintAdapter",
     "enabled_condition",
     "provider_key_vars",
     "resolve_api_key",
+    "resolve_protocol_path",
 ]

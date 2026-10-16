@@ -137,10 +137,11 @@ def install_fake_openai(monkeypatch) -> dict:
 
 
 class RecordingAdapter:
-    def __init__(self, client, run_root, target_dir) -> None:
+    def __init__(self, client, run_root, target_dir, protocol_path=None) -> None:
         self.client = client
         self.run_root = run_root
         self.target_dir = target_dir
+        self.protocol_path = protocol_path
 
 
 def test_build_adapter_keys_off_the_protocol_provider(tmp_path: Path, monkeypatch) -> None:
@@ -158,6 +159,52 @@ def test_build_adapter_keys_off_the_protocol_provider(tmp_path: Path, monkeypatc
         "base_url": "https://example.invalid/v1",
     }
     assert adapter.target_dir == target
+    assert adapter.protocol_path == target / "experiment_protocol.json"
+
+
+def test_build_adapter_reads_an_overriding_protocol(tmp_path: Path, monkeypatch) -> None:
+    target = tmp_path / "target"
+    write_protocol(target, "deepseek")
+    override = tmp_path / "evolution_protocol.json"
+    override.write_text(
+        json.dumps({"provider": {"name": "kimi", "base_url": "https://override.invalid/v1"}}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv("MOONSHOT_API_KEY", "kimi-key")
+    monkeypatch.setattr(system_hint_adapter, "SystemHintAdapter", RecordingAdapter)
+    seen = install_fake_openai(monkeypatch)
+
+    adapter = cli._build_adapter(
+        argparse.Namespace(target_dir=target, protocol=override), tmp_path / "out"
+    )
+
+    assert seen["client"] == {
+        "api_key": "kimi-key",
+        "base_url": "https://override.invalid/v1",
+    }
+    assert adapter.protocol_path == override
+
+
+def test_build_adapter_honours_the_protocol_environment_variable(
+    tmp_path: Path, monkeypatch
+) -> None:
+    target = tmp_path / "target"
+    write_protocol(target, "deepseek")
+    override = tmp_path / "from-env.json"
+    override.write_text(
+        json.dumps({"provider": {"name": "kimi", "base_url": "https://env.invalid/v1"}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(system_hint_adapter.PROTOCOL_ENV_VAR, str(override))
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv("MOONSHOT_API_KEY", "kimi-key")
+    monkeypatch.setattr(system_hint_adapter, "SystemHintAdapter", RecordingAdapter)
+    install_fake_openai(monkeypatch)
+
+    adapter = cli._build_adapter(argparse.Namespace(target_dir=target), tmp_path / "out")
+
+    assert adapter.protocol_path == override
 
 
 def test_build_adapter_reports_the_provider_whose_key_is_missing(

@@ -100,15 +100,16 @@ def _build_adapter(args: argparse.Namespace, out_dir: Path) -> Adapter:
     from openai import OpenAI
 
     from agent_evolution.system_hint_adapter import (
-        PROTOCOL_NAME,
         SystemHintAdapter,
         provider_key_vars,
         resolve_api_key,
+        resolve_protocol_path,
     )
     from agent_evolution.target_harness import resolve_target_dir
 
     target_dir = Path(args.target_dir) if args.target_dir else resolve_target_dir()
-    protocol = json.loads((target_dir / PROTOCOL_NAME).read_text(encoding="utf-8-sig"))
+    protocol_path = resolve_protocol_path(target_dir, getattr(args, "protocol", None))
+    protocol = json.loads(protocol_path.read_text(encoding="utf-8-sig"))
     provider = protocol["provider"]["name"]
     key = resolve_api_key(provider)
     if not key:
@@ -117,7 +118,12 @@ def _build_adapter(args: argparse.Namespace, out_dir: Path) -> Adapter:
             raise SystemExit(f"no API key variable is known for provider {provider!r}")
         raise SystemExit(f"one of {', '.join(expected)} is required to run the {provider} target")
     client = OpenAI(api_key=key, base_url=protocol["provider"]["base_url"])
-    return SystemHintAdapter(client=client, run_root=out_dir, target_dir=target_dir)
+    return SystemHintAdapter(
+        client=client,
+        run_root=out_dir,
+        target_dir=target_dir,
+        protocol_path=protocol_path,
+    )
 
 
 def _evaluate(args: argparse.Namespace) -> int:
@@ -220,6 +226,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     evaluate_parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     evaluate_parser.add_argument("--target-dir", type=Path, default=None)
     evaluate_parser.add_argument(
+        "--protocol",
+        type=Path,
+        default=None,
+        help="protocol file to read (default: AGENT_EVOLUTION_PROTOCOL, else the target's own)",
+    )
+    evaluate_parser.add_argument(
         "--workers",
         type=int,
         default=None,
@@ -249,6 +261,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     evolve_parser.add_argument("--resamples", type=int, default=DEFAULT_RESAMPLES)
     evolve_parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     evolve_parser.add_argument("--target-dir", type=Path, default=None)
+    evolve_parser.add_argument(
+        "--protocol",
+        type=Path,
+        default=None,
+        help="protocol file to read (default: AGENT_EVOLUTION_PROTOCOL, else the target's own)",
+    )
     evolve_parser.add_argument(
         "--workers",
         type=int,

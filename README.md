@@ -58,8 +58,10 @@ src/agent_evolution/
   target_harness.py     # 从目标抽回 harness 文本(黄金等价性校验)
   text.py
 snapshots/system-hint/  # 规范的 golden 快照(canonical)
+protocols/              # 进化专用 protocol(从目标冻结件派生,不改冻结件)
 tests/                  # pytest;目标或录制缺失时自动 skip
 tools/sync_harness.py   # 把 canonical 快照同步/校验进目标仓
+tools/build_evolution_protocol.py  # 派生 protocols/system-hint-evolution.json
 docs/adr/               # 架构决策记录
 docs/agents/            # 给 agent 的仓库约定(issue tracker / 标签 / 领域文档)
 runs/                   # 产物目录(进化运行与评测证据)
@@ -131,7 +133,26 @@ agent-evolution evolve --baseline snapshots/system-hint `
   --suite all --rounds 10 --out runs/evolve/my-run
 ```
 
-`evolve` 关键参数(默认值):`--suite combined`(可重复;`all` 展开为全部套件)、`--rounds 10`、`--max-failures 5`、`--max-rollbacks 3`、`--budget-tokens`(可选)、`--resamples 10000`、`--seed 20261015`、`--workers`(默认读 `AGENT_EVOLUTION_WORKERS`,否则 1)。
+`evolve` 关键参数(默认值):`--suite combined`(可重复;`all` 展开为全部套件)、`--rounds 10`、`--max-failures 5`、`--max-rollbacks 3`、`--budget-tokens`(可选)、`--resamples 10000`、`--seed 20261015`、`--workers`(默认读 `AGENT_EVOLUTION_WORKERS`,否则 1)、`--protocol`(默认读 `AGENT_EVOLUTION_PROTOCOL`,否则目标自带)。
+
+### 用例集与 protocol
+
+目标是 `kimi-k3`,在 `todo_list` 上有真实空间,**默认跑冻结件即可**(`eval-exactness-hint`、`evolve-kimi-digest-fix` 都接受)。但目标的 `experiment_protocol.json` 是**冻结件**:它的 `protocol_sha256` 已写入已发布战役证据,README 也写死每对照 5 例;就地改会让那些声明失效。
+
+当基线失败率接近判据边界时(n=5 时 net +4-of-5 恰好压线),用派生件**同型扩用例**让 accept 稳健:
+
+```powershell
+python tools/build_evolution_protocol.py          # 生成 protocols/system-hint-evolution.json
+python tools/build_evolution_protocol.py --check  # 校验派生件是否仍与冻结件同步
+
+agent-evolution evolve --baseline snapshots/system-hint --suite todo_list --workers 4 `
+  --protocol protocols/system-hint-evolution.json --out runs/evolve/my-run
+```
+
+- 派生件**只覆盖 `cases.todo_list`**:冻结 5 例居前逐字节保留,再追加 5 例**同型**用例(一个纯 token + 4 个 `.txt` 产物,产物名全协议唯一);并多一个 `evolution_extension` 记录来源 `protocol_sha256` 与追加明细。`provider`/`pricing` 等其余字段与冻结件逐字节等价。
+- **不换被测、不加难用例**:两者都实测否掉——`deepseek-v4-flash` 在 6 套件 30/30、在 10 例难用例上仍 10/10(零空间);循环真正卡住的是提案器看不到失败原因(见下)。
+- 选择顺序:`--protocol` > `AGENT_EVOLUTION_PROTOCOL` > 目标自带的 `experiment_protocol.json`。
+- 冻结件一字不改;持久化证据带派生件自己的 `protocol_sha256`,不会与已发布战役混淆。详见 `docs/adr/0008`。
 
 ### 提速
 
@@ -147,6 +168,6 @@ agent-evolution evolve --baseline snapshots/system-hint `
 ## 文档索引
 
 - `GLOSSARY.md` —— 领域术语(唯一权威措辞)。
-- `docs/adr/0001`–`0007` —— 关键设计决策与取舍。
+- `docs/adr/0001`–`0008` —— 关键设计决策与取舍。
 - `docs/agents/` —— issue tracker、triage 标签、领域文档布局等仓库约定。
 - `AGENTS.md` —— 给 agent 的入口。

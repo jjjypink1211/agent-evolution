@@ -98,6 +98,29 @@ def test_evolve_passes_workers_to_the_loop(tmp_path: Path, monkeypatch) -> None:
     assert seen["max_workers"] == 2
 
 
+def test_evolve_passes_the_protocol_override_to_the_adapter(
+    tmp_path: Path, monkeypatch
+) -> None:
+    seen: dict = {}
+    adapter = FakeAdapter(responder=lambda snapshot, case: episode(True), cases=CASES)
+
+    def spy(args, out_dir):
+        seen["protocol"] = args.protocol
+        return adapter
+
+    monkeypatch.setattr(cli, "_build_adapter", spy)
+    monkeypatch.setattr(cli, "_build_proposer", lambda args: Proposer(model=system_prompt_edits("v1")))
+    protocol = tmp_path / "evolution.json"
+
+    cli.main(
+        evolve_args(
+            baseline_dir(tmp_path), tmp_path / "run", "--rounds", "1", "--protocol", str(protocol)
+        )
+    )
+
+    assert seen["protocol"] == protocol
+
+
 def test_select_suites_expands_all_and_dedupes() -> None:
     adapter = FakeAdapter(cases=(CaseRef("combined", "all-01"), CaseRef("todo_list", "todo-01")))
 
