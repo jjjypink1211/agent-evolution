@@ -42,6 +42,22 @@
 
 停止条件(`StopReason`):轮次耗尽 / token 预算触顶 / 回滚过多 / 提案器失败 / 无可用用例。
 
+## 实测结果
+
+在冻结 protocol 上,循环**第 1 轮就接受**了编辑(被测 `kimi-k3`、提案器 `deepseek-v4-flash`、`--suite todo_list`、`--rounds 3`、`--workers 4`):
+
+| 运行 | 结论 | 基线 → 候选 | 净胜 | bootstrap 95% 下界 | tokens |
+|---|---|---|---|---|---|
+| `runs/evolve-kimi-digest-fix` 第 1 轮 | **accept** | 0/5 → 5/5 | **+5** | **+1.000** | 86,322 |
+| ↳ 第 2 / 3 轮 | rollback | 5/5 → 5/5 | +0 | +0.000 | 80,755 / 77,448 |
+| `runs/eval-exactness-hint`(人工候选对照) | **accept** | 1/5 → 5/5 | +4 | +0.400 | 75,817 |
+
+- 循环找到的编辑是 **`write_artifact` 的工具描述**(「…pass only that exact, case-sensitive token…」);提案器自述理由正是这条诊断:「Every todo_list episode fails the gate even though the token appears once in each file … the agent currently wraps the token in prose」。它**胜过**人工手写的 system_prompt 版(+5 vs +4),因为更贴近失效点。
+- 总花费 **157,577 tokens ≈ ¥5.77**(按 kimi 计价)。`history.json` 的 `tokens_used` 会把回滚轮复用的基线 episode 重复计入,故偏高(上报 244,525)。
+- 修复**失败摘要**(`docs/adr/0009`)之前,同样的三跑**全部回滚**、下界恒为 +0.000(`runs/evolve-kimi-todo3`,net +2/+1/+2)。
+- 换更便宜的被测**没有空间**:DeepSeek 在 6 个套件 **30/30**(`runs/baseline-probe`),在 10 例难用例上仍 **10/10**(`runs/baseline-hard`)。
+- 运行目录都在 `runs/`(已 `.gitignore`,不入库);命令与判据可复现。
+
 ## 目录结构
 
 ```
