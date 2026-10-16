@@ -93,6 +93,7 @@ def test_control_arm_reproduces_an_objective_failure(
 
 
 def test_unknown_case_is_rejected(tmp_path: Path, default_snapshot_path: Path) -> None:
+    require_target()
     adapter = SystemHintAdapter(client=object(), run_root=tmp_path)
     with pytest.raises(KeyError):
         adapter.run(Snapshot.load(default_snapshot_path), CaseRef("combined", "nope-99"))
@@ -138,6 +139,7 @@ def test_failure_digest_includes_tool_call_arguments(
     tmp_path: Path, default_snapshot_path: Path
 ) -> None:
     """A gate that judges what was written fails for reasons only the arguments show."""
+    require_target()
     evidence = {
         "condition": "todo_list",
         "complete": True,

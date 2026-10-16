@@ -97,8 +97,6 @@ def _default_out_dir(args: argparse.Namespace) -> Path:
 
 
 def _build_adapter(args: argparse.Namespace, out_dir: Path) -> Adapter:
-    from openai import OpenAI
-
     from agent_evolution.system_hint_adapter import (
         SystemHintAdapter,
         provider_key_vars,
@@ -117,6 +115,9 @@ def _build_adapter(args: argparse.Namespace, out_dir: Path) -> Adapter:
         if not expected:
             raise SystemExit(f"no API key variable is known for provider {provider!r}")
         raise SystemExit(f"one of {', '.join(expected)} is required to run the {provider} target")
+
+    from openai import OpenAI
+
     client = OpenAI(api_key=key, base_url=protocol["provider"]["base_url"])
     return SystemHintAdapter(
         client=client,
