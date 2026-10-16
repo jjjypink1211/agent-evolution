@@ -98,6 +98,25 @@ def test_episode_request_uses_the_supplied_snapshot(
     assert system_messages[0]["content"] == "SNAPSHOT-MARKER-SYSTEM-PROMPT"
 
 
+def test_failure_digest_reports_gates_and_transcript(
+    tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    case_path = recorded_case_path("all-04", "disabled")
+    if not case_path.is_file():
+        pytest.skip(f"recorded case not found at {case_path}")
+    snapshot = Snapshot.load(default_snapshot_path)
+    case = CaseRef("combined", "all-04", "disabled")
+    adapter = SystemHintAdapter(client=ReplayClient(recorded_responses(case_path)), run_root=tmp_path)
+
+    digest = adapter.failure_digest(snapshot, case, adapter.run(snapshot, case))
+
+    assert "objective_pass=False" in digest
+    assert "failed_gates=['timestamps']" in digest
+    assert "termination=submit_result" in digest
+    assert "-- transcript --" in digest
+    assert "assistant: " in digest
+
+
 def test_distinct_snapshots_use_distinct_evidence_dirs(
     tmp_path: Path, default_snapshot_path: Path
 ) -> None:

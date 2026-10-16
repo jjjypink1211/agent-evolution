@@ -27,6 +27,7 @@ class FakeAdapter:
     responder: Callable[[Snapshot, CaseRef], EpisodeResult] = _always_passes
     cases: tuple[CaseRef, ...] = ()
     calls: list[tuple[Snapshot, CaseRef]] = field(default_factory=list)
+    digest: Callable[[CaseRef, EpisodeResult], str] | None = None
 
     def run(self, snapshot: Snapshot, case: CaseRef) -> EpisodeResult:
         self.calls.append((snapshot, case))
@@ -34,3 +35,9 @@ class FakeAdapter:
 
     def cases_for(self, suite: str) -> tuple[CaseRef, ...]:
         return tuple(case for case in self.cases if case.suite == suite)
+
+    def failure_digest(self, snapshot: Snapshot, case: CaseRef, result: EpisodeResult) -> str:
+        if self.digest is not None:
+            return self.digest(case, result)
+        failed = sorted(name for name, ok in result.component_scores.items() if not ok)
+        return f"{case.suite}/{case.case_id}: failed_gates={failed}"

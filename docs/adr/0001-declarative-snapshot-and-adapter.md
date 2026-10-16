@@ -9,7 +9,7 @@
 
 ## Decision
 
-把 harness 表示为**声明式快照目录**（system prompt 文本 + 工具描述/schema + 控制参数），loop 的控制流代码保持不动；进化器通过**通用适配器接缝**接入任意 loop——适配器对上层暴露两件事：**枚举某套件的用例**（`cases_for(suite) -> CaseRef`），以及**给定快照 + 用例 → trajectory + 门禁结果**（`run(snapshot, case) -> EpisodeResult`）。评测器因此保持 target-agnostic：它只吃显式用例列表，由调用方决定用哪套件。
+把 harness 表示为**声明式快照目录**（system prompt 文本 + 工具描述/schema + 控制参数），loop 的控制流代码保持不动；进化器通过**通用适配器接缝**接入任意 loop——适配器对上层只暴露「给定快照 + 用例 → 门禁结果」。
 
 快照只承载 **harness**（agent 脚手架）：system prompt、`<agent_status>` 段模板、工具描述文本，以及启用的 feature 名录。**任务文本（`case_prompt`）不属于快照**——它属于任务/输入侧，随 protocol 用例保存。
 
@@ -25,3 +25,10 @@
 
 - **工具 schema 暂缓**：本期只把**描述文本**外置；工具的参数/schema（`properties` / `required` / `enum`）仍留在代码中，待通用适配器接缝（ticket #4）统一处理。
 - **默认快照逐字节等价**由三重对照保证：canonical 快照 `snapshots/system-hint/` ＝ 目标内置 `harness_snapshot/`，二者均须等于重构前冻结的 golden fixture `tests/fixtures/system_hint_harness.json`。（fixture 不再由目标反向生成，以消除循环论证。）
+
+## Amendment（接缝后续扩展，Decision 原文未改）
+
+`run` 之后的接缝又长出两件事，均为上层所需、且都必须由目标自己实现：
+
+- **枚举套件用例**（ticket #5）：`cases_for(suite) -> CaseRef`，让评测器吃显式用例列表而保持 target-agnostic。
+- **把一次失败渲染成人读摘要**（ticket #6，见 ADR-0004）：`failure_digest(snapshot, case, result) -> str`。相应地把「trajectory 穿过接缝」收敛为「门禁结果穿过接缝、轨迹只在摘要里被渲染」，上层因此不依赖任何目标的证据格式。

@@ -4,6 +4,10 @@ Upper layers (the paired evaluator, the proposer, the evolution loop) depend onl
 on this module: the :class:`Adapter` protocol, :class:`CaseRef` and
 :class:`EpisodeResult`. They never import a target loop's internals. Concrete
 adapters live beside this module and are wired in from the outside.
+
+The protocol has three parts: enumerate a suite's cases (:meth:`Adapter.cases_for`),
+run one episode (:meth:`Adapter.run`), and explain a failure in prose
+(:meth:`Adapter.failure_digest`) so the proposer can stay target-agnostic.
 """
 
 from __future__ import annotations
@@ -53,6 +57,15 @@ class Adapter(Protocol):
 
     def cases_for(self, suite: str) -> Sequence[CaseRef]:
         """Return the cases that make up ``suite``."""
+        ...
+
+    def failure_digest(self, snapshot: Snapshot, case: CaseRef, result: EpisodeResult) -> str:
+        """Render a compact, target-specific digest of why ``result`` failed.
+
+        Only the target knows how to read its own trajectory and gate detail, so it
+        formats the failure here; the proposer consumes the text and never the
+        target's evidence format.
+        """
         ...
 
 

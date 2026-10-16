@@ -16,8 +16,12 @@ from typing import Any, Mapping
 from agent_evolution.adapter import CaseRef, EpisodeResult
 from agent_evolution.snapshot import Snapshot
 from agent_evolution.target_harness import TARGET_MODULE_NAME, load_module, resolve_target_dir
+from agent_evolution.text import clip
 
 PROTOCOL_NAME = "experiment_protocol.json"
+
+DIGEST_TURN_LIMIT = 24
+DIGEST_CHARS = 400
 
 
 def enabled_condition(protocol: Mapping[str, Any], suite: str) -> str:
@@ -96,6 +100,29 @@ class SystemHintAdapter:
     @staticmethod
     def _run_id(case: CaseRef, condition: str) -> str:
         return f"{case.suite}__{case.case_id}__{condition}"
+
+    def failure_digest(self, snapshot: Snapshot, case: CaseRef, result: EpisodeResult) -> str:
+        """Explain why an episode failed, from its own evidence file."""
+        evidence = json.loads(Path(result.evidence_path).read_text(encoding="utf-8"))
+        failed = sorted(name for name, ok in result.component_scores.items() if not ok)
+        lines = [
+            f"case {case.suite}/{case.case_id} (condition {evidence.get('condition', case.condition)})",
+            f"objective_pass={result.objective_pass} failed_gates={failed or 'none'}",
+            f"complete={evidence.get('complete')} termination={evidence.get('termination')} "
+            f"llm_turns={result.llm_turns} tokens={result.tokens}",
+            "-- transcript --",
+        ]
+        for message in evidence.get("messages", [])[-DIGEST_TURN_LIMIT:]:
+            lines.append(f"{message.get('role')}: {clip(message.get('content'), DIGEST_CHARS)}")
+        failed_tools = [event for event in evidence.get("tool_events", []) if not event.get("ok")]
+        if failed_tools:
+            lines.append("-- failed tools --")
+            for event in failed_tools:
+                lines.append(
+                    f"{event.get('name')}{event.get('arguments')}: "
+                    f"{clip(event.get('content'), DIGEST_CHARS)}"
+                )
+        return "\n".join(lines)
 
     def cases_for(self, suite: str) -> tuple[CaseRef, ...]:
         """Return the protocol's cases for ``suite``, each with its default condition."""
