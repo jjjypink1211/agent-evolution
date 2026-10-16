@@ -1,0 +1,1 @@
+TIME GUIDANCE: Treat explicit timestamps as decision evidence. Compare them directly; raw readings do not help unless you translate them into an action.

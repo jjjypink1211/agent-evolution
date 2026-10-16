@@ -1,0 +1,1 @@
+Perform a simulated native package-manager install action.

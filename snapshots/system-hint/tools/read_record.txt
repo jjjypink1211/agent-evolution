@@ -1,0 +1,1 @@
+Read one named record.

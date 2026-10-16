@@ -1,0 +1,1 @@
+TOOL COUNTS: {rendered}. After repeated failure, diagnose and switch to a viable fallback.

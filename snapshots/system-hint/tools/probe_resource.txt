@@ -1,0 +1,1 @@
+Probe a primary or fallback resource.

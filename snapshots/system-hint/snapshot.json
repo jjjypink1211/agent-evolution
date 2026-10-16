@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "features": [
+    "detailed_errors",
+    "system_state",
+    "timestamp_guidance",
+    "timestamps",
+    "todo_list",
+    "tool_counter"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "system_prompt": "You are an audited local-sandbox agent. Use the supplied tools to complete the user's task. Treat tool output as ground truth, do not invent state, and finish by calling submit_result exactly once after verification.",
+  "tool_descriptions": {
+    "inspect_system": "Inspect the simulated host state.",
+    "install_package": "Perform a simulated native package-manager install action.",
+    "list_documents": "List available document filenames after a lookup failure.",
+    "probe_resource": "Probe a primary or fallback resource.",
+    "read_document": "Read one document by filename.",
+    "read_record": "Read one named record.",
+    "rewrite_todo_list": "Create or replace the explicit task checklist.",
+    "submit_result": "Submit the final result only after tool-backed verification.",
+    "update_todo_status": "Update one checklist item after verifying it.",
+    "write_artifact": "Write exact text to a required sandbox artifact."
+  },
+  "status_sections": {
+    "system_state": "SYSTEM STATE: {rendered}",
+    "timestamp_guidance": "TIME GUIDANCE: Treat explicit timestamps as decision evidence. Compare them directly; raw readings do not help unless you translate them into an action.",
+    "todo_list": "TODO LIST: {rendered}. Keep every required deliverable visible until verified.",
+    "tool_counter": "TOOL COUNTS: {rendered}. After repeated failure, diagnose and switch to a viable fallback."
+  }
+}

@@ -1,0 +1,1 @@
+Write exact text to a required sandbox artifact.
