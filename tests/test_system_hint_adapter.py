@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from agent_evolution.adapter import CaseRef
+from agent_evolution.edit import ON, Edit, EditKind
 from agent_evolution.snapshot import Snapshot
 from agent_evolution.system_hint_adapter import SystemHintAdapter, provider_key_vars, resolve_api_key
 from agent_evolution.target_harness import TARGET_MODULE_NAME, resolve_target_dir
@@ -195,6 +196,28 @@ def test_flipping_a_feature_off_moves_the_objective_gate(
         ok for name, ok in disabled.component_scores.items() if name != "timestamps"
     )
     assert disabled.objective_pass is False
+
+
+def test_flipping_a_feature_on_moves_the_objective_gate(
+    tmp_path: Path, default_snapshot_path: Path
+) -> None:
+    require_target()
+    reduced = without_feature(Snapshot.load(default_snapshot_path), "timestamps")
+    enabled = Edit(EditKind.FEATURE, key="timestamps", value=ON).apply(reduced)
+
+    _, off = run_policy(reduced, "all-01", tmp_path)
+    _, on = run_policy(enabled, "all-01", tmp_path)
+
+    assert off.component_scores["timestamps"] is False
+    assert off.objective_pass is False
+    assert dict(on.component_scores) == {
+        "timestamps": True,
+        "tool_counter": True,
+        "todo_list": True,
+        "detailed_errors": True,
+        "system_state": True,
+    }
+    assert on.objective_pass is True
 
 
 def test_feature_flip_reaches_the_surface_the_agent_sees(
